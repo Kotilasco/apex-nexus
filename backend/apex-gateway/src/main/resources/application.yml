@@ -1,0 +1,153 @@
+server:
+  port: 8080
+  max-http-request-header-size: 64KB
+
+spring:
+  application:
+    name: apex-gateway
+  codec:
+    max-in-memory-size: 500MB
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+              - PROPFIND
+              - LOCK
+              - UNLOCK
+              - HEAD
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+      routes:
+        # Auth Service
+        - id: auth-service
+          uri: http://${AUTH_SERVICE_HOST:localhost}:${AUTH_SERVICE_PORT:8081}
+          predicates:
+            - Path=/api/auth/**, /api/projects/**, /api/governance/**
+          filters:
+            - StripPrefix=1
+
+        # Document Service
+        - id: document-service
+          uri: http://${DOCUMENT_SERVICE_HOST:localhost}:${DOCUMENT_SERVICE_PORT:8082}
+          predicates:
+            - Path=/api/documents/**, /api/folders/**, /api/notes/**
+          filters:
+            - StripPrefix=1
+            - name: RequestSize
+              args:
+                maxSize: 500MB
+
+        # WebDAV (Edit-In-Place) — routed to Document Service
+        - id: webdav-service
+          uri: http://${DOCUMENT_SERVICE_HOST:localhost}:${DOCUMENT_SERVICE_PORT:8082}
+          predicates:
+            - Path=/api/webdav/**
+          filters:
+            - StripPrefix=1
+            - name: RequestSize
+              args:
+                maxSize: 500MB
+
+        # WOPI (Office Online Co-Authoring) — routed to Document Service
+        - id: wopi-service
+          uri: http://${DOCUMENT_SERVICE_HOST:localhost}:${DOCUMENT_SERVICE_PORT:8082}
+          predicates:
+            - Path=/api/wopi/**
+          filters:
+            - StripPrefix=1
+            - name: RequestSize
+              args:
+                maxSize: 500MB
+
+        # Lock Management — routed to Document Service
+        - id: lock-service
+          uri: http://${DOCUMENT_SERVICE_HOST:localhost}:${DOCUMENT_SERVICE_PORT:8082}
+          predicates:
+            - Path=/api/locks/**
+          filters:
+            - StripPrefix=1
+
+        # WebSocket (Lock Status) — routed to Document Service
+        - id: websocket-service
+          uri: http://${DOCUMENT_SERVICE_HOST:localhost}:${DOCUMENT_SERVICE_PORT:8082}
+          predicates:
+            - Path=/ws/documents/**
+
+        # Workflow Service
+        - id: workflow-service
+          uri: http://${WORKFLOW_SERVICE_HOST:localhost}:${WORKFLOW_SERVICE_PORT:8083}
+          predicates:
+            - Path=/api/workflows/**, /api/workflow/**, /api/approvals/**
+          filters:
+            - StripPrefix=1
+
+        # AI Service (routed to Workflow Service)
+        - id: ai-service
+          uri: http://${WORKFLOW_SERVICE_HOST:localhost}:${WORKFLOW_SERVICE_PORT:8083}
+          predicates:
+            - Path=/api/ai/**
+          filters:
+            - StripPrefix=1
+
+        # Search Service
+        - id: search-service
+          uri: http://${SEARCH_SERVICE_HOST:localhost}:${SEARCH_SERVICE_PORT:8084}
+          predicates:
+            - Path=/api/search/**
+          filters:
+            - StripPrefix=1
+
+        # Retention Service
+        - id: retention-service
+          uri: http://${RETENTION_SERVICE_HOST:localhost}:${RETENTION_SERVICE_PORT:8085}
+          predicates:
+            - Path=/api/retention/**, /api/disposition/**
+          filters:
+            - StripPrefix=1
+
+        # Audit Service
+        - id: audit-service
+          uri: http://${AUDIT_SERVICE_HOST:localhost}:${AUDIT_SERVICE_PORT:8086}
+          predicates:
+            - Path=/api/audit/**
+          filters:
+            - StripPrefix=1
+
+        # Notification Service
+        - id: notification-service
+          uri: http://${NOTIFICATION_SERVICE_HOST:localhost}:${NOTIFICATION_SERVICE_PORT:8087}
+          predicates:
+            - Path=/api/notifications/**,/api/notification/**
+          filters:
+            - StripPrefix=1
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO

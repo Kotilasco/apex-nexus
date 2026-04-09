@@ -1,0 +1,57 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: apex-notification-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:apex_nexus}
+    username: ${POSTGRES_USER:apex_admin}
+    password: ${POSTGRES_PASSWORD:dev_password}
+    hikari:
+      maximum-pool-size: 10
+      connection-init-sql: "SELECT set_config('app.current_user_id', '00000000-0000-0000-0000-000000000000', false)"
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:dev_redis_password}
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASS:}
+    properties:
+      mail.smtp.auth: false
+      mail.smtp.starttls.enable: false
+
+jwt:
+  secret: ${JWT_SECRET:dev_jwt_secret_key_change_in_production_must_be_at_least_256_bits}
+
+notification:
+  queue-key: "apex:notifications:queue"
+  poll-interval: 3000
+  from-email: "noreply@apexnexus.local"
+
+springdoc:
+  api-docs:
+    path: /notification/v3/api-docs
+  swagger-ui:
+    path: /notification/swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+logging:
+  level:
+    com.apexnexus: DEBUG

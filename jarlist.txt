@@ -1,0 +1,9 @@
+backend/apex-audit-service/target/apex-audit-service-1.0.0-SNAPSHOT.jar
+backend/apex-auth-service/target/apex-auth-service-1.0.0-SNAPSHOT.jar
+backend/apex-common/target/apex-common-1.0.0-SNAPSHOT.jar
+backend/apex-document-service/target/apex-document-service-1.0.0-SNAPSHOT.jar
+backend/apex-gateway/target/apex-gateway-1.0.0-SNAPSHOT.jar
+backend/apex-notification-service/target/apex-notification-service-1.0.0-SNAPSHOT.jar
+backend/apex-retention-service/target/apex-retention-service-1.0.0-SNAPSHOT.jar
+backend/apex-search-service/target/apex-search-service-1.0.0-SNAPSHOT.jar
+backend/apex-workflow-service/target/apex-workflow-service-1.0.0-SNAPSHOT.jar

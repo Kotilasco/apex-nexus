@@ -1,0 +1,412 @@
+version: '3.9'
+
+services:
+  # =============================================
+  # INFRASTRUCTURE
+  # =============================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: apex-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-apex_nexus}
+      POSTGRES_USER: ${POSTGRES_USER:-apex_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
+    ports:
+      - "5460:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./infrastructure/postgres/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+      - ./infrastructure/postgres/V2__elo_gap_features.sql:/docker-entrypoint-initdb.d/03-v2-elo-gap.sql
+      - ./infrastructure/postgres/V3__enterprise_maturity.sql:/docker-entrypoint-initdb.d/04-v3-enterprise.sql
+      - ./infrastructure/postgres/V4__missing_tables.sql:/docker-entrypoint-initdb.d/05-v4-missing-tables.sql
+      - ./infrastructure/postgres/V5__ecm_features.sql:/docker-entrypoint-initdb.d/06-v5-ecm-features.sql
+      - ./infrastructure/postgres/V6__version_anomaly.sql:/docker-entrypoint-initdb.d/07-v6-version-anomaly.sql
+      - ./infrastructure/postgres/fix_missing_tables.sql:/docker-entrypoint-initdb.d/08-fix-missing-tables.sql
+      - ./infrastructure/postgres/fix_plugins.sql:/docker-entrypoint-initdb.d/09-fix-plugins.sql
+      - ./infrastructure/postgres/V7__fix_schema_gaps.sql:/docker-entrypoint-initdb.d/10-v7-fix-gaps.sql
+      - ./infrastructure/postgres/V8__project_workflow.sql:/docker-entrypoint-initdb.d/11-v8-project-workflow.sql
+    networks:
+      - apex-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-apex_admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+  redis:
+    image: redis:7-alpine
+    container_name: apex-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-dev_redis_password} --appendonly yes
+    ports:
+      - "6579:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - apex-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-dev_redis_password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: apex-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-apex_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-dev_minio_secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - apex-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: apex-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set apexminio http://minio:9000 $${MINIO_ACCESS_KEY:-apex_minio_admin} $${MINIO_SECRET_KEY:-dev_minio_secret};
+      mc mb --ignore-existing apexminio/apex-documents;
+      mc mb --ignore-existing apexminio/apex-documents-encrypted;
+      mc mb --ignore-existing apexminio/apex-thumbnails;
+      mc anonymous set none apexminio/apex-documents;
+      mc anonymous set none apexminio/apex-documents-encrypted;
+      exit 0;
+      "
+    networks:
+      - apex-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: apex-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - cluster.name=apex-search
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - apex-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 180s
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: apex-kibana
+    profiles:
+      - optional
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - apex-network
+
+  # =============================================
+  # BACKEND MICROSERVICES
+  # =============================================
+
+  apex-gateway:
+    build:
+      context: ./backend/apex-gateway
+      dockerfile: Dockerfile
+    container_name: apex-gateway
+    ports:
+      - "${GATEWAY_PORT:-8200}:8080"
+    volumes:
+      - ./backend/apex-gateway/src/main/resources/application.yml:/app/config/application.yml:ro
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-dev}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-dev_redis_password}
+      - AUTH_SERVICE_HOST=apex-auth-service
+      - DOCUMENT_SERVICE_HOST=apex-document-service
+      - WORKFLOW_SERVICE_HOST=apex-workflow-service
+      - SEARCH_SERVICE_HOST=apex-search-service
+      - RETENTION_SERVICE_HOST=apex-retention-service
+      - AUDIT_SERVICE_HOST=apex-audit-service
+      - NOTIFICATION_SERVICE_HOST=apex-notification-service
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - apex-network
+
+  apex-auth-service:
+    build:
+      context: ./backend/apex-auth-service
+      dockerfile: Dockerfile
+    container_name: apex-auth-service
+    ports:
+      - "${AUTH_SERVICE_PORT:-8201}:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-dev}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-apex_nexus}
+      - POSTGRES_USER=${POSTGRES_USER:-apex_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dev_password}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-dev_redis_password}
+      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_key_change_in_production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - apex-network
+
+  apex-document-service:
+    build:
+      context: ./backend/apex-document-service
+      dockerfile: Dockerfile
+    container_name: apex-document-service
+    ports:
+      - "${DOCUMENT_SERVICE_PORT:-8202}:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-dev}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-apex_nexus}
+      - POSTGRES_USER=${POSTGRES_USER:-apex_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dev_password}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-dev_redis_password}
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-apex_minio_admin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-dev_minio_secret}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev_32_byte_encryption_key_here!}
+      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_key_change_in_production}
+      - SEARCH_SERVICE_URL=http://apex-search-service:8084
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - apex-network
+
+  apex-workflow-service:
+    build:
+      context: ./backend/apex-workflow-service
+      dockerfile: Dockerfile
+    container_name: apex-workflow-service
+    ports:
+      - "${WORKFLOW_SERVICE_PORT:-8203}:8083"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-dev}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-apex_nexus}
+      - POSTGRES_USER=${POSTGRES_USER:-apex_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dev_password}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-dev_redis_password}
+      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_key_change_in_production}
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - apex-network
+
+  apex-search-service:
+    build:
+      context: ./backend/apex-search-service
+      dockerfile: Dockerfile
+    container_name: apex-search-service
+    ports:
+      - "${SEARCH_SERVICE_PORT:-8204}:8084"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-dev}
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-apex_nexus}
+      - POSTGRES_USER=${POSTGRES_USER:-apex_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dev_password}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-dev_redis_password}
+      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_key_change_in_production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - apex-network
+
+  apex-retention-service:
+    build:
+      context: ./backend/apex-retention-service
+      dockerfile: Dockerfile
+    container_name: apex-retention-service
+    ports:
+      - "${RETENTION_SERVICE_PORT:-8205}:8085"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-dev}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-apex_nexus}
+      - POSTGRES_USER=${POSTGRES_USER:-apex_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dev_password}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-dev_redis_password}
+      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_key_change_in_production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - apex-network
+
+  apex-audit-service:
+    build:
+      context: ./backend/apex-audit-service
+      dockerfile: Dockerfile
+    container_name: apex-audit-service
+    ports:
+      - "${AUDIT_SERVICE_PORT:-8206}:8086"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-dev}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-apex_nexus}
+      - POSTGRES_USER=${POSTGRES_USER:-apex_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dev_password}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-dev_redis_password}
+      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_key_change_in_production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - apex-network
+
+  apex-notification-service:
+    build:
+      context: ./backend/apex-notification-service
+      dockerfile: Dockerfile
+    container_name: apex-notification-service
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-8207}:8087"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-dev}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-apex_nexus}
+      - POSTGRES_USER=${POSTGRES_USER:-apex_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dev_password}
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-dev_redis_password}
+      - SMTP_HOST=${SMTP_HOST:-mailhog}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - JWT_SECRET=${JWT_SECRET:-dev_jwt_secret_key_change_in_production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - apex-network
+
+  # =============================================
+  # FRONTEND
+  # =============================================
+
+  apex-web:
+    build:
+      context: ./frontend/web
+      dockerfile: Dockerfile
+    container_name: apex-web
+    profiles:
+      - frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:${GATEWAY_PORT:-8500}/api
+      - NEXT_PUBLIC_WS_URL=ws://localhost:${GATEWAY_PORT:-8500}/ws
+    depends_on:
+      - apex-gateway
+    networks:
+      - apex-network
+
+  # =============================================
+  # AI SERVICE
+  # =============================================
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: apex-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - apex-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  # =============================================
+  # DEV TOOLS
+  # =============================================
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: apex-mailhog
+    ports:
+      - "1025:1025"
+      - "8525:8025"
+    networks:
+      - apex-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  elasticsearch_data:
+  ollama_data:
+
+networks:
+  apex-network:
+    driver: bridge

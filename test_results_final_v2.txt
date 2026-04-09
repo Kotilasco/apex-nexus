@@ -1,0 +1,135 @@
+=== SETUP ===
+Token: 440 chars
+
+=== 1. AUTH & RBAC ===
+[PASS] 1.1a Login endpoint
+[FAIL] 1.1a Login endpoint — 200
+[PASS] 1.2 GET /auth/me
+[PASS] 1.3 GET /auth/users
+[PASS] 1.4 Register user
+[PASS] 1.5 Login as new user
+[PASS] 1.6 Invalid token (401)
+[PASS] 1.7 RBAC: new user list docs
+[PASS] 1.8 Logout
+
+=== 2. DOCUMENT MANAGEMENT ===
+[PASS] 2.1 GET /documents/my
+[PASS] 2.2 GET /folders/root
+[PASS] 2.3 Create folder
+  Folder: 6c8069f0-05eb-478b-98aa-edcea2ac2721
+[PASS] 2.4 Upload PDF
+  Doc: c93aae69-3d48-4a46-8f01-173d3ca8694e
+[PASS] 2.5 Upload DOCX
+[PASS] 2.6 Upload PNG
+[PASS] 2.7 GET /documents/{id}
+[PASS] 2.8 Download document
+[PASS] 2.9 Version history
+[PASS] 2.10 Checkout
+[PASS] 2.11 Checkin (new version)
+[PASS] 2.12 Add note
+[PASS] 2.13 List notes
+[PASS] 2.14 Set legal hold
+[PASS] 2.15 Remove legal hold
+[PASS] 2.16 Document preview
+[PASS] 2.17 Pending signatures
+[PASS] 2.18 Docs in folder
+[PASS] 2.19 Folder children
+
+=== 3. WORKFLOW ENGINE ===
+[PASS] 3.1 GET /workflow/definitions
+  WF Def: d0000000-0000-0000-0000-000000000001
+[PASS] 3.2 GET definition/{id}
+[PASS] 3.3 GET /workflow/instances/my
+[FAIL] 3.4 Start workflow — 500 {"success":false,"message":"An unexpected error occurred","timestamp":"2026-04-04T05:26:25.992417673Z"}
+  WF Instance: 
+[SKIP] 3.5 GET instance/{id}
+[SKIP] 3.6 Workflow history
+[PASS] 3.7 Pending approvals
+[PASS] 3.8 Approval count
+[PASS] 3.9 GET /workflows/templates
+[PASS] 3.10 Pending forwards
+
+=== 4. SEARCH ===
+[PASS] 4.1 GET /search?q=test
+[PASS] 4.2 POST /search
+[PASS] 4.3 Semantic search
+[PASS] 4.4 Index document
+[PASS] 4.5 GDPR scan
+
+=== 5. RETENTION & COMPLIANCE ===
+[PASS] 5.1 GET /retention/policies
+[PASS] 5.2 Create policy
+[PASS] 5.3 GET policy/{id}
+[PASS] 5.4 Pending dispositions
+[PASS] 5.5 Retention stats
+[PASS] 5.6 GET jurisdictions
+[PASS] 5.7 Legal frameworks
+[PASS] 5.8 Jurisdiction rules
+
+=== 6. AUDIT ===
+[PASS] 6.1 GET /audit/recent
+[PASS] 6.2 Audit stats
+[PASS] 6.3 Logs by action (LOGIN)
+[PASS] 6.4 Logs by resource type
+[PASS] 6.5 Logs by date range
+
+=== 7. NOTIFICATIONS ===
+[PASS] 7.1 GET /notification/my
+[PASS] 7.2 Unread notifications
+[PASS] 7.3 Unread count
+[PASS] 7.4 Mark all read
+
+=== 8. GOVERNANCE ===
+[PASS] 8.1 Effective policies
+[PASS] 8.2 Global policies
+
+=== 9. PLUGINS ===
+[PASS] 9.1 GET /auth/plugins
+[PASS] 9.2 Active plugins
+
+=== 10. PROJECTS & SHARE LINKS ===
+[PASS] 10.1 GET /projects
+[PASS] 10.2 GET /projects/mine
+[PASS] 10.3 Industry templates
+[PASS] 10.4 Create share link
+[PASS] 10.5 List share links
+
+=== 11. INTEGRATION (Direct Health) ===
+[PASS] 11.1 Health: auth (8201)
+[PASS] 11.1 Health: retention (8205)
+[PASS] 11.1 Health: audit (8206)
+[PASS] 11.2 Gateway -> auth/me
+[PASS] 11.2 Gateway -> documents/my
+[PASS] 11.2 Gateway -> workflow/definitions
+[PASS] 11.2 Gateway -> search?q=test
+[PASS] 11.2 Gateway -> retention/policies
+[PASS] 11.2 Gateway -> audit/recent
+[PASS] 11.2 Gateway -> notification/my
+
+=== 12. EDGE CASES ===
+[PASS] 12.1 Long query — 200
+[PASS] 12.2 Empty login (400)
+[PASS] 12.3 No auth header (401)
+[PASS] 12.4 Not found (404)
+[PASS] 12.5 Duplicate upload — 201
+[FAIL] 12.6 Delete — 500
+
+============================================
+       APEX NEXUS FINAL TEST RESULTS
+============================================
+PASSED:  80
+FAILED:  3
+SKIPPED: 2
+TOTAL:   85
+============================================
+
+--- FAILURES ---
+[FAIL] 1.1a Login endpoint — 200
+[FAIL] 3.4 Start workflow — 500 {"success":false,"message":"An unexpected error occurred","timestamp":"2026-04-04T05:26:25.992417673Z"}
+[FAIL] 12.6 Delete — 500
+
+--- SKIPS ---
+[SKIP] 3.5 GET instance/{id}
+[SKIP] 3.6 Workflow history
+
+Full results saved to test_results_final.txt

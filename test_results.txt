@@ -1,0 +1,79 @@
+=== Step 1: Login ===
+Login HTTP Status: 500
+
+=== Step 2: Extract Token ===
+[eval]:1
+const j=require('./login_resp.json');require('fs').writeFileSync('token.txt',j.data.accessToken)
+                                             500
+4. /api/audit/recent -> 500
+5. /api/retention/policies -> 200
+6. /api/search?q=test -> 200
+7. /api/notifications -> 500
+
+=== Step 4: Get Response Body for Failed Endpoints ===
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 57: rev: command not found
+test_api.sh: line 57: rev: command not found
+
+--- Endpoint 1 () returned  ---
+{"timestamp":"2026-04-03T20:32:28.936+00:00","path":"/","status":404,"error":"Not Found","requestId":"cc4b65d9-145"}
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 57: rev: command not found
+test_api.sh: line 57: rev: command not found
+
+--- Endpoint 2 () returned  ---
+{"timestamp":"2026-04-03T20:32:32.764+00:00","path":"/","status":404,"error":"Not Found","requestId":"013d78f7-147"}
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 57: rev: command not found
+test_api.sh: line 57: rev: command not found
+
+--- Endpoint 3 () returned  ---
+{"timestamp":"2026-04-03T20:32:36.337+00:00","path":"/","status":404,"error":"Not Found","requestId":"8d705e13-150"}
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 57: rev: command not found
+test_api.sh: line 57: rev: command not found
+
+--- Endpoint 4 () returned  ---
+{"timestamp":"2026-04-03T20:32:38.751+00:00","path":"/","status":404,"error":"Not Found","requestId":"df67129b-152"}
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 57: rev: command not found
+test_api.sh: line 57: rev: command not found
+
+--- Endpoint 5 () returned  ---
+{"timestamp":"2026-04-03T20:32:41.781+00:00","path":"/","status":404,"error":"Not Found","requestId":"54e387c9-155"}
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 57: rev: command not found
+test_api.sh: line 57: rev: command not found
+
+--- Endpoint 6 () returned  ---
+{"timestamp":"2026-04-03T20:32:44.758+00:00","path":"/","status":404,"error":"Not Found","requestId":"37e48fc4-158"}
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 57: rev: command not found
+test_api.sh: line 57: rev: command not found
+
+--- Endpoint 7 () returned  ---
+{"timestamp":"2026-04-03T20:32:47.273+00:00","path":"/","status":404,"error":"Not Found","requestId":"3328f363-161"}
+
+=== ALL TESTS COMPLETE ===
+ound
+test_api.sh: line 57: rev: command not found
+test_api.sh: line 57: rev: command not found
+
+--- Endpoint 6 () returned  ---
+{"timestamp":"2026-04-03T20:32:45.017+00:00","path":"/","status":404,"error":"Not Found","requestId":"de67cc99-160"}
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 56: rev: command not found
+test_api.sh: line 57: rev: command not found
+test_api.sh: line 57: rev: command not found
+
+--- Endpoint 7 () returned  ---
+{"timestamp":"2026-04-03T20:32:47.432+00:00","path":"/","status":404,"error":"Not Found","requestId":"9aab2c25-162"}
+
+=== ALL TESTS COMPLETE ===

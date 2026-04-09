@@ -1,0 +1,10 @@
+module.exports = function (api) {
+  api.cache(true);
+  return {
+    presets: ['babel-preset-expo'],
+    plugins: [
+      ['@nozbe/watermelondb/babel'],
+      'react-native-reanimated/plugin',
+    ],
+  };
+};

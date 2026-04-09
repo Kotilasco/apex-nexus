@@ -1,0 +1,17 @@
+**/src
+**/pom.xml
+**/.mvn
+**/mvnw
+**/mvnw.cmd
+**/target/classes
+**/target/generated-sources
+**/target/generated-test-sources
+**/target/test-classes
+**/target/maven-status
+**/target/maven-archiver
+**/target/surefire-reports
+**/.git
+**/.gitignore
+**/.idea
+**/*.iml
+**/node_modules

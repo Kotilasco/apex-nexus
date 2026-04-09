@@ -1,0 +1,5 @@
+Caused by: jakarta.persistence.PersistenceException: [PersistenceUnit: default] Unable to build Hibernate SessionFactory; nested exception is org.hibernate.tool.schema.spi.SchemaManagementException: Schema-validation: missing table [document_signatures]
+Caused by: org.hibernate.tool.schema.spi.SchemaManagementException: Schema-validation: missing table [document_signatures]
+2026-04-03T17:59:41.421Z  INFO 1 --- [apex-document-service] [           main] c.a.document.DocumentServiceApplication  : Starting DocumentServiceApplication v1.0.0-SNAPSHOT using Java 21.0.10 with PID 1 (/app/app.jar started by root in /app)
+2026-04-03T18:03:30.733Z  INFO 1 --- [apex-document-service] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8082 (http) with context path '/'
+2026-04-03T18:03:30.799Z  INFO 1 --- [apex-document-service] [           main] c.a.document.DocumentServiceApplication  : Started DocumentServiceApplication in 266.126 seconds (process running for 221.004)

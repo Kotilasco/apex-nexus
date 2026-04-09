@@ -1,0 +1,1 @@
+SELECT 'CL=' || coalesce(classification_label,'NULL') || ',M365=' || coalesce(m365_link,'NULL') || ',DS=' || coalesce(docusign_envelope_id,'NULL') || ',SAP=' || coalesce(sap_document_number,'NULL') AS result FROM documents WHERE id='cf7cd55c-09cb-41a8-902c-239de261b627';

@@ -1,0 +1,39 @@
+=== Docker Status ===
+time="2026-04-06T13:48:33+02:00" level=warning msg="C:\\Users\\ze9167867\\Desktop\\Apex Nexus\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+NAME                        IMAGE                                                  COMMAND                  SERVICE                     CREATED             STATUS                      PORTS
+apex-audit-service          apexnexus-apex-audit-service                           "java -jar app.jar"      apex-audit-service          12 minutes ago      Up 10 minutes               0.0.0.0:8206->8086/tcp, [::]:8206->8086/tcp
+apex-auth-service           apexnexus-apex-auth-service                            "java -jar app.jar"      apex-auth-service           12 minutes ago      Up 10 minutes               0.0.0.0:8201->8081/tcp, [::]:8201->8081/tcp
+apex-document-service       apexnexus-apex-document-service                        "java -jar app.jar"      apex-document-service       12 minutes ago      Up 7 minutes                0.0.0.0:8202->8082/tcp, [::]:8202->8082/tcp
+apex-elasticsearch          docker.elastic.co/elasticsearch/elasticsearch:8.12.0   "/bin/tini -- /usr/l…"   elasticsearch               12 minutes ago      Up 11 minutes (unhealthy)   0.0.0.0:9200->9200/tcp, [::]:9200->9200/tcp
+apex-gateway                apexnexus-apex-gateway                                 "java -jar app.jar"      apex-gateway                12 minutes ago      Up 11 minutes               0.0.0.0:8200->8080/tcp, [::]:8200->8080/tcp
+apex-mailhog                mailhog/mailhog:latest                                 "MailHog"                mailhog                     12 minutes ago      Up 11 minutes               0.0.0.0:1025->1025/tcp, [::]:1025->1025/tcp, 0.0.0.0:8025->8025/tcp, [::]:8025->8025/tcp
+apex-minio                  minio/minio:latest                                     "/usr/bin/docker-ent…"   minio                       12 minutes ago      Up 11 minutes (healthy)     0.0.0.0:9000-9001->9000-9001/tcp, [::]:9000-9001->9000-9001/tcp
+apex-notification-service   apexnexus-apex-notification-service                    "java -jar app.jar"      apex-notification-service   12 minutes ago      Up 10 minutes               0.0.0.0:8207->8087/tcp, [::]:8207->8087/tcp
+apex-postgres               postgres:16-alpine                                     "docker-entrypoint.s…"   postgres                    12 minutes ago      Up 11 minutes (healthy)     0.0.0.0:5432->5432/tcp, [::]:5432->5432/tcp
+apex-redis                  redis:7-alpine                                         "docker-entrypoint.s…"   redis                       12 minutes ago      Up 11 minutes (healthy)     0.0.0.0:6579->6379/tcp, [::]:6579->6379/tcp
+apex-retention-service      apexnexus-apex-retention-service                       "java -jar app.jar"      apex-retention-service      12 minutes ago      Up 10 minutes               0.0.0.0:8205->8085/tcp, [::]:8205->8085/tcp
+apex-web                    apexnexus-apex-web                                     "docker-entrypoint.s…"   apex-web                    About an hour ago   Up About an hour            0.0.0.0:3000->3000/tcp, [::]:3000->3000/tcp
+apex-workflow-service       apexnexus-apex-workflow-service                        "java -jar app.jar"      apex-workflow-service       12 minutes ago      Up 10 minutes               0.0.0.0:8203->8083/tcp, [::]:8203->8083/tcp
+
+=== Testing Gateway Health ===
+
+=== Testing Auth Direct ===
+
+=== Gateway Logs (last 20) ===
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.0)
+
+2026-04-06T11:41:22.142Z  INFO 1 --- [apex-gateway] [           main] c.apexnexus.gateway.GatewayApplication   : Starting GatewayApplication v1.0.0-SNAPSHOT using Java 21.0.10 with PID 1 (/app/app.jar started by root in /app)
+2026-04-06T11:41:22.677Z  INFO 1 --- [apex-gateway] [           main] c.apexnexus.gateway.GatewayApplication   : The following 1 profile is active: "dev"
+2026-04-06T11:46:43.165Z  INFO 1 --- [apex-gateway] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-04-06T11:46:43.570Z  INFO 1 --- [apex-gateway] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-04-06T11:46:46.528Z  INFO 1 --- [apex-gateway] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 1895 ms. Found 0 Redis repository interfaces.
+2026-04-06T11:47:06.494Z  INFO 1 --- [apex-gateway] [           main] o.s.cloud.context.scope.GenericScope     : BeanFactory id=ca506cce-078d-3b53-938f-10507198bd8e
+
+=== DONE ===

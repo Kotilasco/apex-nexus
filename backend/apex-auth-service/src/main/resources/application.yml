@@ -1,0 +1,36 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: apex-auth-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:apex_nexus}?stringtype=unspecified
+    username: ${POSTGRES_USER:apex_admin}
+    password: ${POSTGRES_PASSWORD:dev_password}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+jwt:
+  secret: ${JWT_SECRET:dev_jwt_secret_key_change_in_production_must_be_at_least_256_bits}
+  expiration-ms: ${JWT_EXPIRATION_MS:3600000}
+  refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:86400000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

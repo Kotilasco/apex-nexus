@@ -1,0 +1,19 @@
+Fresh token length: 440
+
+=== ALL 7 ENDPOINTS WITH FRESH TOKEN ===
+1. /api/auth/me -> 200
+2. /api/documents/my -> 200
+3. /api/workflows -> 500
+4. /api/audit/recent -> 500
+5. /api/retention/policies -> 200
+6. /api/search?q=test -> 200
+7. /api/notifications -> 500
+
+=== ERROR BODIES FOR NON-200 ===
+--- /api/workflows ---
+{"success":false,"message":"An unexpected error occurred","timestamp":"2026-04-03T20:38:29.025982043Z"}
+--- /api/audit/recent ---
+{"success":false,"message":"An unexpected error occurred","timestamp":"2026-04-03T20:38:29.447092008Z"}
+--- /api/notifications ---
+{"success":false,"message":"An unexpected error occurred","timestamp":"2026-04-03T20:38:29.923057519Z"}
+=== COMPLETE ===

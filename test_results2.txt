@@ -1,0 +1,15 @@
+=== FRESH LOGIN ATTEMPT ===
+Login HTTP Status: 200
+Login Response:
+{"success":true,"message":"Login successful","data":{"accessToken":"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJiMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZXMiOlsiU1lTVEVNX0FETUlOIl0sImlhdCI6MTc3NTI0ODUyNSwiZXhwIjoxNzc1MjUyMTI1LCJwcm9qZWN0UGVybXMiOnsiZTAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAxIjpbIkFETUlOIiwiRVhQT1JUIiwiUkVBRCIsIldSSVRFIiwiREVMRVRFIiwiQVBQUk9WRSIsIlJFVEVOVElPTiIsIkFJX0lOVk9LRSIsIkFJX0NPTkZJR1VSRSIsIk1BTkFHRSJdfX0.Svw7_iVggkQbCVA3Q5c_uL6nfxseHzt04AbNt0sI-8c","refreshToken":"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJiMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTc3NTI0ODUyNiwiZXhwIjoxNzc1MzM0OTI2fQ.yHILj2X1NaMBdNA4n0scTxGfXgBoLm1ADrbiUaQ__xY","tokenType":"Bearer","expiresIn":3600,"userId":"b0000000-0000-0000-0000-000000000001","username":"admin","fullName":"System Administrator","roles":["SYSTEM_ADMIN"],"permissions":["ADMIN:VIEW_AUDIT","FOLDER:READ_ALL","FOLDER:UPDATE","RETENTION:APPROVE_DESTRUCTION","GOVERNANCE:AUDIT","DOCUMENT:DELETE","DOCUMENT:READ","FOLDER:CREATE","FOLDER:READ","DOCUMENT:APPROVE","FOLDER:DELETE","DOCUMENT:CHECKOUT","GOVERNANCE:MANAGE","ADMIN:MANAGE_USERS","ADMIN:SYSTEM_CONFIG","GOVERNANCE:VIEW","WORKFLOW:MANAGE","PROJECT:MANAGE","DOCUMENT:CREATE","RETENTION:MANAGE","DOCUMENT:UPDATE","PROJECT:CREATE","DOCUMENT:READ_ALL"],"projectPermissions":{"e0000000-0000-0000-0000-000000000001":["ADMIN","EXPORT","READ","WRITE","DELETE","APPROVE","RETENTION","AI_INVOKE","AI_CONFIGURE","MANAGE"]}},"timestamp":"2026-04-03T20:35:26.665505862Z"}
+
+Using existing token (length: 440)
+
+=== FAILED ENDPOINT BODIES ===
+--- /api/workflows (was 500) ---
+{"success":false,"message":"An unexpected error occurred","timestamp":"2026-04-03T20:35:32.451508364Z"}
+--- /api/audit/recent (was 500) ---
+{"success":false,"message":"An unexpected error occurred","timestamp":"2026-04-03T20:35:34.437571089Z"}
+--- /api/notifications (was 500) ---
+{"success":false,"message":"An unexpected error occurred","timestamp":"2026-04-03T20:35:37.552459214Z"}
+=== DONE ===

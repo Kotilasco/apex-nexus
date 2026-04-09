@@ -1,0 +1,20 @@
+2026-04-09T08:00:09.952Z DEBUG 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : SAP ERP Connector plugin is not active — skipping SAP document numbering
+2026-04-09T08:00:26.120Z  INFO 1 --- [apex-search-service] [   scheduling-1] c.a.s.service.ClassificationService      : Classified 'Test Contract No Plugins' as 'Contract' (confidence: {:.2f})
+2026-04-09T08:00:26.151Z  INFO 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : Classified document 'Test Contract No Plugins' as 'Contract' (confidence: 0.4)
+2026-04-09T08:00:26.154Z DEBUG 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : Microsoft 365 Integration plugin is not active — skipping M365 linking
+2026-04-09T08:00:26.173Z DEBUG 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : SAP ERP Connector plugin is not active — skipping SAP document numbering
+2026-04-09T08:07:35.241Z  INFO 1 --- [apex-search-service] [   scheduling-1] c.a.s.service.ClassificationService      : Classified 'Test Contract No Plugins' as 'Contract' (confidence: {:.2f})
+2026-04-09T08:07:35.281Z  INFO 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : Classified document 'Test Contract No Plugins' as 'Contract' (confidence: 0.4)
+2026-04-09T08:07:35.373Z DEBUG 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : Microsoft 365 Integration plugin is not active — skipping M365 linking
+2026-04-09T08:07:35.392Z DEBUG 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : SAP ERP Connector plugin is not active — skipping SAP document numbering
+2026-04-09T08:08:33.877Z  INFO 1 --- [apex-search-service] [   scheduling-1] c.a.s.service.ClassificationService      : Classified 'Test Contract No Plugins' as 'Contract' (confidence: {:.2f})
+2026-04-09T08:08:33.894Z  INFO 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : Classified document 'Test Contract No Plugins' as 'Contract' (confidence: 0.4)
+2026-04-09T08:08:33.897Z DEBUG 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : Microsoft 365 Integration plugin is not active — skipping M365 linking
+2026-04-09T08:08:33.903Z DEBUG 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : SAP ERP Connector plugin is not active — skipping SAP document numbering
+2026-04-09T09:12:02.430Z  INFO 1 --- [apex-search-service] [   scheduling-1] c.a.s.service.ContentExtractorService    : Content extraction completed for 'Final Test Invoice All Plugins' (68 chars, 3197ms)
+2026-04-09T09:12:02.844Z  INFO 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : Enriched document 'Final Test Invoice All Plugins' with extracted content (68 chars, 3197ms)
+2026-04-09T09:12:04.316Z  INFO 1 --- [apex-search-service] [   scheduling-1] c.a.s.service.ClassificationService      : Classified 'Final Test Invoice All Plugins' as 'Invoice' (confidence: {:.2f})
+2026-04-09T09:12:04.555Z  INFO 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : Classified document 'Final Test Invoice All Plugins' as 'Invoice' (confidence: 0.4)
+2026-04-09T09:12:04.595Z  INFO 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : Microsoft 365 link generated for document 'Final Test Invoice All Plugins': https://apexnexus.sharepoint.com/sites/ecm/Shared%20Documents/Final%20Test%20Invoice%20All%20Plugins
+2026-04-09T09:12:04.636Z  INFO 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.IndexQueueProcessor   : SAP document number SAP-FI-F19766AE assigned to 'Final Test Invoice All Plugins' (classification: Invoice)
+2026-04-09T09:12:13.329Z DEBUG 1 --- [apex-search-service] [   scheduling-1] c.a.search.service.SearchService         : Indexed document: 327bc0b0-0340-4bd3-98df-ef354530a263

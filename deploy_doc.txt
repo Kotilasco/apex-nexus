@@ -1,0 +1,89 @@
+time="2026-04-09T10:55:53+02:00" level=warning msg="C:\\Users\\ze9167867\\Desktop\\Apex Nexus\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+#1 [internal] load local bake definitions
+#1 reading from stdin 664B 0.2s done
+#1 DONE 0.2s
+
+#2 [internal] load build definition from Dockerfile
+#2 DONE 0.1s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile:
+#2 transferring dockerfile: 169B 1.6s done
+#2 DONE 4.1s
+
+#3 [internal] load metadata for docker.io/library/eclipse-temurin:21-jre-alpine
+#3 DONE 3.0s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 33B 0.0s
+#4 transferring context: 193B 0.1s done
+#4 DONE 0.3s
+
+#5 [internal] load build context
+#5 DONE 0.0s
+
+#6 [1/3] FROM docker.io/library/eclipse-temurin:21-jre-alpine@sha256:6ad8ed080d9be96b61438ec3ce99388e294af216ed57356000c06070e85c5d5d
+#6 resolve docker.io/library/eclipse-temurin:21-jre-alpine@sha256:6ad8ed080d9be96b61438ec3ce99388e294af216ed57356000c06070e85c5d5d
+#6 resolve docker.io/library/eclipse-temurin:21-jre-alpine@sha256:6ad8ed080d9be96b61438ec3ce99388e294af216ed57356000c06070e85c5d5d 0.7s done
+#6 DONE 1.3s
+
+#5 [internal] load build context
+#5 transferring context: 32.87kB 9.1s
+#5 transferring context: 7.37MB 14.2s
+#5 transferring context: 10.49MB 19.2s
+#5 transferring context: 17.93MB 24.3s
+#5 transferring context: 21.99MB 29.4s
+#5 transferring context: 23.66MB 34.5s
+#5 transferring context: 26.38MB 39.7s
+#5 transferring context: 30.12MB 44.7s
+#5 transferring context: 33.37MB 49.7s
+#5 transferring context: 42.84MB 54.8s
+#5 transferring context: 53.75MB 59.9s
+#5 transferring context: 56.28MB 65.0s
+#5 transferring context: 61.65MB 70.1s
+#5 transferring context: 75.81MB 75.2s
+#5 transferring context: 87.35MB 80.3s
+#5 transferring context: 87.50MB 80.3s done
+#5 DONE 80.5s
+
+#7 [2/3] WORKDIR /app
+#7 CACHED
+
+#8 [3/3] COPY target/*.jar app.jar
+#8 DONE 19.0s
+
+#9 exporting to image
+#9 exporting layers
+#9 exporting layers 54.6s done
+#9 exporting manifest sha256:e0662cd2f5e44013565bc5232650a57afcd1acf20a44cdf0e5d59eb146def007
+#9 exporting manifest sha256:e0662cd2f5e44013565bc5232650a57afcd1acf20a44cdf0e5d59eb146def007 0.7s done
+#9 exporting config sha256:d78d497a4fe105696d19da1159183a401c1bc44780a4528eb7e72aa8ae5838fd
+#9 exporting config sha256:d78d497a4fe105696d19da1159183a401c1bc44780a4528eb7e72aa8ae5838fd 0.2s done
+#9 exporting attestation manifest sha256:3690584c432dc042ae2180c4a24cb9fcceab0117a0508b377db07e50967ff87e
+#9 exporting attestation manifest sha256:3690584c432dc042ae2180c4a24cb9fcceab0117a0508b377db07e50967ff87e 0.4s done
+#9 exporting manifest list sha256:46694d22a4ab253f19b94a2df626fa58a38be06f719d98d03d9c61a87de76001 0.1s done
+#9 naming to docker.io/library/apexnexus-apex-document-service:latest
+#9 naming to docker.io/library/apexnexus-apex-document-service:latest 0.0s done
+#9 unpacking to docker.io/library/apexnexus-apex-document-service:latest
+#9 unpacking to docker.io/library/apexnexus-apex-document-service:latest 29.3s done
+#9 DONE 87.1s
+
+#10 resolving provenance for metadata file
+#10 DONE 2.8s
+ apexnexus-apex-document-service  Built
+BUILD_DONE
+time="2026-04-09T11:00:23+02:00" level=warning msg="C:\\Users\\ze9167867\\Desktop\\Apex Nexus\\docker-compose.yml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+ Container apex-minio  Running
+ Container apex-redis  Running
+ Container apex-postgres  Running
+ Container apex-document-service  Recreate
+ Container apex-document-service  Recreated
+ Container apex-minio  Waiting
+ Container apex-postgres  Waiting
+ Container apex-redis  Waiting
+ Container apex-redis  Healthy
+ Container apex-postgres  Healthy
+ Container apex-minio  Healthy
+ Container apex-document-service  Starting
+ Container apex-document-service  Started
+DEPLOY_DONE

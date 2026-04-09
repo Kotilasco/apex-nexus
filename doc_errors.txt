@@ -1,0 +1,42 @@
+	at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:93) ~[tomcat-embed-core-10.1.24.jar!/:na]
+Caused by: org.hibernate.exception.ConstraintViolationException: could not execute statement [ERROR: update or delete on table "documents" violates foreign key constraint "wopi_access_tokens_document_id_fkey" on table "wopi_access_tokens"
+	at org.hibernate.exception.internal.SQLStateConversionDelegate.convert(SQLStateConversionDelegate.java:97) ~[hibernate-core-6.5.2.Final.jar!/:6.5.2.Final]
+	at org.hibernate.exception.internal.StandardSQLExceptionConverter.convert(StandardSQLExceptionConverter.java:58) ~[hibernate-core-6.5.2.Final.jar!/:6.5.2.Final]
+	at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:108) ~[hibernate-core-6.5.2.Final.jar!/:6.5.2.Final]
+Caused by: org.postgresql.util.PSQLException: ERROR: update or delete on table "documents" violates foreign key constraint "wopi_access_tokens_document_id_fkey" on table "wopi_access_tokens"
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2725) ~[postgresql-42.7.3.jar!/:42.7.3]
+2026-04-04T08:13:44.615Z  WARN 1 --- [apex-document-service] [nio-8082-exec-1] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: 23503
+2026-04-04T08:13:44.617Z ERROR 1 --- [apex-document-service] [nio-8082-exec-1] o.h.engine.jdbc.spi.SqlExceptionHelper   : ERROR: update or delete on table "documents" violates foreign key constraint "workflow_instances_document_id_fkey" on table "workflow_instances"
+2026-04-04T08:13:44.648Z ERROR 1 --- [apex-document-service] [nio-8082-exec-1] c.a.c.exception.GlobalExceptionHandler   : Unexpected error occurred
+org.springframework.dao.DataIntegrityViolationException: could not execute statement [ERROR: update or delete on table "documents" violates foreign key constraint "workflow_instances_document_id_fkey" on table "workflow_instances"
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.convertHibernateAccessException(HibernateJpaDialect.java:290) ~[spring-orm-6.1.8.jar!/:6.1.8]
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.translateExceptionIfPossible(HibernateJpaDialect.java:241) ~[spring-orm-6.1.8.jar!/:6.1.8]
+	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126) ~[spring-security-web-6.3.0.jar!/:6.3.0]
+	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120) ~[spring-security-web-6.3.0.jar!/:6.3.0]
+	at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:93) ~[tomcat-embed-core-10.1.24.jar!/:na]
+Caused by: org.hibernate.exception.ConstraintViolationException: could not execute statement [ERROR: update or delete on table "documents" violates foreign key constraint "workflow_instances_document_id_fkey" on table "workflow_instances"
+	at org.hibernate.exception.internal.SQLStateConversionDelegate.convert(SQLStateConversionDelegate.java:97) ~[hibernate-core-6.5.2.Final.jar!/:6.5.2.Final]
+	at org.hibernate.exception.internal.StandardSQLExceptionConverter.convert(StandardSQLExceptionConverter.java:58) ~[hibernate-core-6.5.2.Final.jar!/:6.5.2.Final]
+	at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:108) ~[hibernate-core-6.5.2.Final.jar!/:6.5.2.Final]
+Caused by: org.postgresql.util.PSQLException: ERROR: update or delete on table "documents" violates foreign key constraint "workflow_instances_document_id_fkey" on table "workflow_instances"
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2725) ~[postgresql-42.7.3.jar!/:42.7.3]
+2026-04-04T08:13:51.747Z ERROR 1 --- [apex-document-service] [nio-8082-exec-8] c.a.c.exception.GlobalExceptionHandler   : Unexpected error occurred
+org.springframework.web.servlet.resource.NoResourceFoundException: No static resource notes/1a8b5f64-b52b-4dce-929c-708d635aa544.
+	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126) ~[spring-security-web-6.3.0.jar!/:6.3.0]
+	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120) ~[spring-security-web-6.3.0.jar!/:6.3.0]
+	at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:93) ~[tomcat-embed-core-10.1.24.jar!/:na]
+2026-04-04T08:14:01.209Z  WARN 1 --- [apex-document-service] [nio-8082-exec-8] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: 23503
+2026-04-04T08:14:01.210Z ERROR 1 --- [apex-document-service] [nio-8082-exec-8] o.h.engine.jdbc.spi.SqlExceptionHelper   : ERROR: update or delete on table "documents" violates foreign key constraint "wopi_access_tokens_document_id_fkey" on table "wopi_access_tokens"
+2026-04-04T08:14:01.214Z ERROR 1 --- [apex-document-service] [nio-8082-exec-8] c.a.c.exception.GlobalExceptionHandler   : Unexpected error occurred
+org.springframework.dao.DataIntegrityViolationException: could not execute statement [ERROR: update or delete on table "documents" violates foreign key constraint "wopi_access_tokens_document_id_fkey" on table "wopi_access_tokens"
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.convertHibernateAccessException(HibernateJpaDialect.java:290) ~[spring-orm-6.1.8.jar!/:6.1.8]
+	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.translateExceptionIfPossible(HibernateJpaDialect.java:241) ~[spring-orm-6.1.8.jar!/:6.1.8]
+	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126) ~[spring-security-web-6.3.0.jar!/:6.3.0]
+	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120) ~[spring-security-web-6.3.0.jar!/:6.3.0]
+	at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:93) ~[tomcat-embed-core-10.1.24.jar!/:na]
+Caused by: org.hibernate.exception.ConstraintViolationException: could not execute statement [ERROR: update or delete on table "documents" violates foreign key constraint "wopi_access_tokens_document_id_fkey" on table "wopi_access_tokens"
+	at org.hibernate.exception.internal.SQLStateConversionDelegate.convert(SQLStateConversionDelegate.java:97) ~[hibernate-core-6.5.2.Final.jar!/:6.5.2.Final]
+	at org.hibernate.exception.internal.StandardSQLExceptionConverter.convert(StandardSQLExceptionConverter.java:58) ~[hibernate-core-6.5.2.Final.jar!/:6.5.2.Final]
+	at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:108) ~[hibernate-core-6.5.2.Final.jar!/:6.5.2.Final]
+Caused by: org.postgresql.util.PSQLException: ERROR: update or delete on table "documents" violates foreign key constraint "wopi_access_tokens_document_id_fkey" on table "wopi_access_tokens"
+	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2725) ~[postgresql-42.7.3.jar!/:42.7.3]

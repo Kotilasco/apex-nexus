@@ -1,0 +1,20 @@
+=== Login ===
+OK: token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiO...
+
+=== Version History (direct port 8202) ===
+  V3: file=Memo - Kudakwashe Koti Access to NCC.docx, size=14583, author=System Administrator, anomaly=N/A, score=None, reasons=None
+  V2: file=Memo - Kudakwashe Koti Access to NCC.docx, size=14375, author=System Administrator, anomaly=N/A, score=None, reasons=None
+  V1: file=Memo - Kudakwashe Koti Access to NCC.docx, size=35391, author=System Administrator, anomaly=N/A, score=None, reasons=None
+  Total: 3 versions
+
+=== Checkout doc for anomaly test ===
+  Checkout: HTTP 200
+
+=== Check-in with COMPLETELY DIFFERENT file ===
+  Check-in: HTTP 500
+  Response: {"success":false,"message":"An unexpected error occurred","timestamp":"2026-04-07T06:36:09.494924512Z"}
+
+=== Versions After Check-In ===
+  V3: Auto-saved from Word via WebDAV | anomaly=False, score=None
+  V2: None | anomaly=False, score=None
+  V1: Initial upload | anomaly=False, score=None

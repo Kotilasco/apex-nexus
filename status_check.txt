@@ -1,0 +1,17 @@
+apex-audit-service: Up 52 minutes
+apex-auth-service: Up 25 hours
+apex-document-service: Up 4 hours
+apex-elasticsearch: Up 2 days (healthy)
+apex-gateway: Up 52 minutes
+apex-mailhog: Up 2 days
+apex-minio: Up 2 days (healthy)
+apex-notification-service: Up 25 hours
+apex-postgres: Up 38 hours (healthy)
+apex-redis: Up 2 days (healthy)
+apex-retention-service: Up 4 hours
+apex-search-service: Up 25 hours
+apex-workflow-service: Up 4 hours
+construction-erp-db-1: Up 2 days
+docker-db-explorer: Up 37 hours
+ussd-redis-1: Up 39 hours (healthy)
+ussd-ussd-app-1: Up 39 hours

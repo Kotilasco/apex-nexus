@@ -1,0 +1,52 @@
+2026-04-06T09:02:04.822Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [RemoteAddr]
+2026-04-06T09:02:04.823Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [XForwardedRemoteAddr]
+2026-04-06T09:02:04.824Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [Weight]
+2026-04-06T09:02:04.825Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [CloudFoundryRouteService]
+2026-04-06T09:02:10.986Z  INFO 1 --- [apex-gateway] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoints beneath base path '/actuator'
+2026-04-06T09:02:23.592Z  INFO 1 --- [apex-gateway] [           main] o.s.b.web.embedded.netty.NettyWebServer  : Netty started on port 8080 (http)
+2026-04-06T09:02:27.037Z  INFO 1 --- [apex-gateway] [           main] c.apexnexus.gateway.GatewayApplication   : Started GatewayApplication in 106.989 seconds (process running for 125.886)
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.0)
+
+2026-04-06T11:11:32.335Z  INFO 1 --- [apex-gateway] [           main] c.apexnexus.gateway.GatewayApplication   : Starting GatewayApplication v1.0.0-SNAPSHOT using Java 21.0.10 with PID 1 (/app/app.jar started by root in /app)
+2026-04-06T11:11:32.490Z  INFO 1 --- [apex-gateway] [           main] c.apexnexus.gateway.GatewayApplication   : The following 1 profile is active: "dev"
+2026-04-06T11:12:51.200Z  INFO 1 --- [apex-gateway] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-04-06T11:12:51.301Z  INFO 1 --- [apex-gateway] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2026-04-06T11:12:53.523Z  INFO 1 --- [apex-gateway] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 477 ms. Found 0 Redis repository interfaces.
+2026-04-06T11:13:04.457Z  INFO 1 --- [apex-gateway] [           main] o.s.cloud.context.scope.GenericScope     : BeanFactory id=ca506cce-078d-3b53-938f-10507198bd8e
+2026-04-06T11:14:12.808Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [After]
+2026-04-06T11:14:12.813Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [Before]
+2026-04-06T11:14:12.817Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [Between]
+2026-04-06T11:14:12.820Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [Cookie]
+2026-04-06T11:14:12.822Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [Header]
+2026-04-06T11:14:12.823Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [Host]
+2026-04-06T11:14:12.825Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [Method]
+2026-04-06T11:14:12.826Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [Path]
+2026-04-06T11:14:12.834Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [Query]
+2026-04-06T11:14:12.838Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [ReadBody]
+2026-04-06T11:14:12.840Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [RemoteAddr]
+2026-04-06T11:14:12.841Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [XForwardedRemoteAddr]
+2026-04-06T11:14:12.843Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [Weight]
+2026-04-06T11:14:12.845Z  INFO 1 --- [apex-gateway] [           main] o.s.c.g.r.RouteDefinitionRouteLocator    : Loaded RoutePredicateFactory [CloudFoundryRouteService]
+2026-04-06T11:14:20.322Z  INFO 1 --- [apex-gateway] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoints beneath base path '/actuator'
+2026-04-06T11:14:40.225Z  INFO 1 --- [apex-gateway] [           main] o.s.b.web.embedded.netty.NettyWebServer  : Netty started on port 8080 (http)
+2026-04-06T11:14:49.061Z  INFO 1 --- [apex-gateway] [           main] c.apexnexus.gateway.GatewayApplication   : Started GatewayApplication in 223.601 seconds (process running for 265.736)
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.0)
+
+2026-04-06T11:22:40.256Z  INFO 1 --- [apex-gateway] [           main] c.apexnexus.gateway.GatewayApplication   : Starting GatewayApplication v1.0.0-SNAPSHOT using Java 21.0.10 with PID 1 (/app/app.jar started by root in /app)
+2026-04-06T11:22:40.556Z  INFO 1 --- [apex-gateway] [           main] c.apexnexus.gateway.GatewayApplication   : The following 1 profile is active: "dev"
+wget: can't connect to remote host (172.22.0.8): Connection refused
+SCRIPT_DONE

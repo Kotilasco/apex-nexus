@@ -1,0 +1,2 @@
+-- Plugins are already seeded by V3__enterprise_maturity.sql with the correct schema.
+-- This file is intentionally a no-op.
