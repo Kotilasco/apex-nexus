@@ -20,6 +20,7 @@ export default function VersionsPanel({ document: doc, onClose }: Props) {
   const [previewVersion, setPreviewVersion] = useState<number | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewText, setPreviewText] = useState<string | null>(null);
 
   // Compare mode state
   const [compareMode, setCompareMode] = useState(false);
@@ -51,13 +52,20 @@ export default function VersionsPanel({ document: doc, onClose }: Props) {
       // Toggle off
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
+      setPreviewText(null);
       setPreviewVersion(null);
       return;
     }
     setPreviewLoading(true);
     setPreviewVersion(version.versionNumber);
+    setPreviewText(null);
     try {
       const res = await documentApi.downloadVersion(doc.id, version.versionNumber);
+      const mime = doc.mimeType || '';
+      if (mime.startsWith('text/') || mime === 'application/json') {
+        const text = await res.data.text();
+        setPreviewText(text);
+      }
       const url = URL.createObjectURL(res.data);
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setPreviewUrl(url);
@@ -277,6 +285,8 @@ export default function VersionsPanel({ document: doc, onClose }: Props) {
                       <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600" />
                       <span className="ml-2 text-sm text-slate-500">Loading preview…</span>
                     </div>
+                  ) : previewText !== null ? (
+                    <pre className="p-4 text-xs font-mono text-slate-800 bg-white max-h-[400px] overflow-auto whitespace-pre-wrap">{previewText}</pre>
                   ) : previewUrl && isDocx ? (
                     <div className="h-[400px]">
                       <DocxViewer url={previewUrl} />
@@ -286,6 +296,10 @@ export default function VersionsPanel({ document: doc, onClose }: Props) {
                   ) : previewUrl && doc.mimeType?.startsWith('image/') ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={previewUrl} alt={`Version ${v.versionNumber}`} className="max-h-[400px] mx-auto" />
+                  ) : previewUrl && doc.mimeType?.startsWith('video/') ? (
+                    <video src={previewUrl} controls className="w-full max-h-[400px]" />
+                  ) : previewUrl && doc.mimeType?.startsWith('audio/') ? (
+                    <div className="p-6 flex items-center justify-center"><audio src={previewUrl} controls /></div>
                   ) : previewUrl ? (
                     <div className="p-4 text-center text-sm text-slate-500">
                       Preview not available for this file type.{' '}

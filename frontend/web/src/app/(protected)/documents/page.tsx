@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { documentApi, lockApi, wopiApi, workflowApi, projectApi } from '@/lib/api';
+import { documentApi, lockApi, wopiApi, workflowApi, projectApi, signatureApi } from '@/lib/api';
 import type { WorkflowDefinition, WorkflowInstance } from '@/lib/types';
 import { useProjectStore } from '@/lib/project-store';
 import type { Document, Folder, VersionPreCheckResult } from '@/lib/types';
@@ -10,12 +10,13 @@ import { formatBytes, formatDate, getFileIcon } from '@/lib/utils';
 import {
   Upload, FolderPlus, ChevronRight, Home, Download, Lock,
   Unlock, Trash2, FileText, StickyNote, MoreVertical, Eye, Bot, Shield, ExternalLink,
-  Edit3, Heart, UploadCloud, AlertTriangle, GitBranch, Send, Loader2, Save, X,
+  Edit3, Heart, UploadCloud, AlertTriangle, GitBranch, Send, Loader2, Save, X, PenTool,
 } from 'lucide-react';
 import UploadModal from '@/components/documents/UploadModal';
 import NotesPanel from '@/components/documents/NotesPanel';
 import VersionsPanel from '@/components/documents/VersionsPanel';
 import DocumentRetentionPanel from '@/components/documents/DocumentRetentionPanel';
+import SignaturePanel from '@/components/documents/SignaturePanel';
 import dynamic from 'next/dynamic';
 
 const DocxViewer = dynamic(() => import('@/components/documents/DocxViewer'), { ssr: false });
@@ -290,6 +291,18 @@ export default function DocumentsPage() {
   const handleCancelTextEdit = () => {
     setIsTextEditing(false);
     setEditedContent('');
+  };
+
+  const handleRequestSignature = async (doc: Document, provider: 'INTERNAL' | 'DOCUSIGN') => {
+    const signerIdInput = prompt('Enter signer user ID (UUID):');
+    if (!signerIdInput) return;
+    try {
+      await signatureApi.request(doc.id, signerIdInput, provider);
+      alert(`Signature request sent (${provider})`);
+      loadData();
+    } catch {
+      alert('Failed to request signature');
+    }
   };
 
   // Cleanup heartbeat on unmount or navigation
@@ -593,17 +606,19 @@ export default function DocumentsPage() {
                                 </span>
                               )}
                               {doc.m365Link && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-semibold" title={doc.m365Link}>
+                                <a href={doc.m365Link} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-semibold hover:bg-blue-200 transition-colors cursor-pointer" title={`Open in SharePoint: ${doc.m365Link}`}>
                                   M365
-                                </span>
+                                </a>
                               )}
                               {doc.docusignEnvelopeId && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[10px] font-semibold" title={doc.docusignEnvelopeId}>
+                                <a href={`https://app.docusign.com/documents/details/${doc.docusignEnvelopeId}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[10px] font-semibold hover:bg-yellow-200 transition-colors cursor-pointer" title={`View DocuSign Envelope: ${doc.docusignEnvelopeId}`}>
                                   DocuSign
-                                </span>
+                                </a>
                               )}
                               {doc.sapDocumentNumber && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-semibold" title={doc.sapDocumentNumber}>
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-semibold" title={`SAP Document: ${doc.sapDocumentNumber}`}>
                                   SAP {doc.sapDocumentNumber}
                                 </span>
                               )}
@@ -1027,6 +1042,53 @@ export default function DocumentsPage() {
                   </div>
                 )}
               </div>
+
+              {/* Plugin Integrations */}
+              {(selectedDoc.m365Link || selectedDoc.docusignEnvelopeId || selectedDoc.sapDocumentNumber) && (
+                <div className="border border-slate-200 rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Integrations</p>
+                  {selectedDoc.m365Link && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-semibold">M365</span>
+                        <span className="text-xs text-slate-600 truncate max-w-[200px]" title={selectedDoc.m365Link}>SharePoint Linked</span>
+                      </div>
+                      <a href={selectedDoc.m365Link} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                        <ExternalLink className="h-3 w-3" /> Open in SharePoint
+                      </a>
+                    </div>
+                  )}
+                  {selectedDoc.docusignEnvelopeId && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[10px] font-semibold">DocuSign</span>
+                        <span className="text-xs text-slate-600 truncate max-w-[200px]" title={selectedDoc.docusignEnvelopeId}>{selectedDoc.docusignEnvelopeId}</span>
+                      </div>
+                      <a href={`https://app.docusign.com/documents/details/${selectedDoc.docusignEnvelopeId}`} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-yellow-700 hover:underline flex items-center gap-1">
+                        <ExternalLink className="h-3 w-3" /> View Envelope
+                      </a>
+                    </div>
+                  )}
+                  {selectedDoc.sapDocumentNumber && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-semibold">SAP</span>
+                        <span className="text-xs text-slate-600">{selectedDoc.sapDocumentNumber}</span>
+                      </div>
+                      <span className="text-xs text-orange-600 flex items-center gap-1">
+                        <FileText className="h-3 w-3" /> Linked
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Signatures */}
+            <div className="px-4 pb-2">
+              <SignaturePanel documentId={selectedDoc.id} />
             </div>
 
             {/* Actions bar */}
@@ -1109,6 +1171,10 @@ export default function DocumentsPage() {
                 <button onClick={() => { setShowRetention(true); }}
                   className="px-4 py-2 border border-emerald-300 text-emerald-600 rounded-lg text-sm hover:bg-emerald-50" title="Retention & Compliance">
                   <Shield className="h-4 w-4" />
+                </button>
+                <button onClick={() => handleRequestSignature(selectedDoc, 'INTERNAL')}
+                  className="px-4 py-2 border border-violet-300 text-violet-600 rounded-lg text-sm hover:bg-violet-50" title="Request Signature">
+                  <PenTool className="h-4 w-4" />
                 </button>
               </div>
               {editingDocId !== selectedDoc.id && (
