@@ -64,6 +64,11 @@ export default function DocumentsPage() {
   const [editedContent, setEditedContent] = useState('');
   const [savingContent, setSavingContent] = useState(false);
 
+  // Signature modal state
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [signatureSignerId, setSignatureSignerId] = useState('');
+  const [signatureProvider, setSignatureProvider] = useState<'INTERNAL' | 'DOCUSIGN'>('INTERNAL');
+
   // Workflow state
   const [showWorkflow, setShowWorkflow] = useState(false);
   const [showRetention, setShowRetention] = useState(false);
@@ -294,14 +299,22 @@ export default function DocumentsPage() {
   };
 
   const handleRequestSignature = async (doc: Document, provider: 'INTERNAL' | 'DOCUSIGN') => {
-    const signerIdInput = prompt('Enter signer user ID (UUID):');
-    if (!signerIdInput) return;
+    setSignatureProvider(provider);
+    setSignatureSignerId('');
+    setShowSignatureModal(true);
+  };
+
+  const [signatureError, setSignatureError] = useState<string | null>(null);
+  const handleSubmitSignatureRequest = async () => {
+    if (!selectedDoc || !signatureSignerId.trim()) return;
+    setSignatureError(null);
     try {
-      await signatureApi.request(doc.id, signerIdInput, provider);
-      alert(`Signature request sent (${provider})`);
+      await signatureApi.request(selectedDoc.id, signatureSignerId.trim(), signatureProvider);
+      setShowSignatureModal(false);
+      setSignatureSignerId('');
       loadData();
-    } catch {
-      alert('Failed to request signature');
+    } catch (e: any) {
+      setSignatureError(e?.response?.data?.message || 'Failed to request signature');
     }
   };
 
@@ -734,6 +747,41 @@ export default function DocumentsPage() {
           projectId={activeProject?.id}
           onClose={() => { setShowWorkflow(false); }}
         />
+      )}
+
+      {/* Signature Request Modal */}
+      {showSignatureModal && selectedDoc && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-[420px]">
+            <h3 className="text-lg font-semibold mb-4">Request Signature</h3>
+            <p className="text-sm text-gray-600 mb-2">Document: {selectedDoc.title}</p>
+            {signatureError && <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">{signatureError}</div>}
+            <label className="block text-sm font-medium text-gray-700 mb-1">Signer User ID (UUID)</label>
+            <input
+              value={signatureSignerId}
+              onChange={e => setSignatureSignerId(e.target.value)}
+              placeholder="e.g. b0000000-0000-0000-0000-000000000001"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-violet-400"
+            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Provider</label>
+            <select
+              value={signatureProvider}
+              onChange={e => setSignatureProvider(e.target.value as 'INTERNAL' | 'DOCUSIGN')}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-violet-400"
+            >
+              <option value="INTERNAL">Internal</option>
+              <option value="DOCUSIGN">DocuSign</option>
+            </select>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowSignatureModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+              <button
+                onClick={handleSubmitSignatureRequest}
+                disabled={!signatureSignerId.trim()}
+                className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700 disabled:opacity-50"
+              >Send Request</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Document Retention Panel */}

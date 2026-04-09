@@ -33,28 +33,42 @@ export default function SignaturePanel({ documentId }: { documentId: string }) {
       .finally(() => setLoading(false));
   }, [documentId]);
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleSign = async (id: string) => {
+    setError(null);
     try {
       await signatureApi.sign(id);
       const res = await signatureApi.getByDocument(documentId);
       setSignatures(res.data.data || []);
-    } catch { /* ignore */ }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Only the assigned signer can sign this document';
+      setError(msg);
+    }
   };
 
   const handleDecline = async (id: string) => {
+    setError(null);
     try {
       await signatureApi.decline(id);
       const res = await signatureApi.getByDocument(documentId);
       setSignatures(res.data.data || []);
-    } catch { /* ignore */ }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Only the assigned signer can decline this request';
+      setError(msg);
+    }
   };
 
   if (loading) return <div className="text-sm text-gray-400">Loading signatures...</div>;
   if (signatures.length === 0) return null;
 
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <h4 className="text-sm font-semibold text-gray-900 mb-3">Signatures</h4>
+      {error && (
+        <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">{error}</div>
+      )}
       <div className="space-y-2">
         {signatures.map(sig => (
           <div key={sig.id} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
