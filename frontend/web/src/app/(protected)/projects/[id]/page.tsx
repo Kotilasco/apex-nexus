@@ -291,7 +291,16 @@ export default function ProjectDetailPage() {
   const toggleProjectPlugin = async (plugin: ProjectPluginStatus) => {
     setTogglingPlugin(plugin.pluginId);
     try {
-    
+      if (plugin.activeInProject) {
+        await projectApi.deactivatePlugin(projectId, plugin.pluginId);
+      } else {
+        await projectApi.activatePlugin(projectId, plugin.pluginId);
+      }
+      const res = await projectApi.getPlugins(projectId);
+      setProjectPlugins(res.data?.data ?? res.data ?? []);
+    } catch { alert('Failed to toggle plugin'); }
+    setTogglingPlugin(null);
+  };
 
   const handleToggleAi = async () => {
     setTogglingAi(true);
@@ -313,11 +322,24 @@ export default function ProjectDetailPage() {
       setSubProjects(res.data?.data ?? res.data ?? []);
     } catch { alert('Failed to create sub-project'); }
     setSubCreateLoading(false);
-  };  if (plugin.activeInProject) {
-        await projectApi.deactivatePlugin(projectId, plugin.pluginId);
-      } else {
-        await projectApi.activatePlugin(projectId, plugin.pluginId);
-      }project.parentProjectId ? `/projects/${project.parentProjectId}` : '/projects')}
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+      </div>
+    );
+  }
+
+  if (!project) return null;
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button onClick={() => router.push(project.parentProjectId ? `/projects/${project.parentProjectId}` : '/projects')}
             className="p-2 rounded-lg hover:bg-slate-100 text-slate-400" title="Back">
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -336,30 +358,9 @@ export default function ProjectDetailPage() {
                 <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">AI</span>
               )}
               {(project.subProjectCount ?? 0) > 0 && (
-                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">{project.subProjectCount} sub-project{project.subProjectCount !== 1 ? 's' : ''}
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
-      </div>
-    );
-  }
-
-  if (!project) return null;
-
-  return (
-    <div classNamesub-projects' as const, label: `Sub-Projects${(project.subProjectCount ?? 0) > 0 ? ` (${project.subProjectCount})` : ''}`, icon: Layers },
-          { key: '="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button onClick={() => router.push('/projects')}
-            className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <div>
-            <div className="flex items-center gap-3">
-              <FolderKanban className="h-6 w-6 text-primary-600" />
-              <h1 className="text-2xl font-bold text-slate-900">{project.name}</h1>
-              {project.aiEnabled && (
-                <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">AI</span>
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                  {project.subProjectCount} sub-project{project.subProjectCount !== 1 ? 's' : ''}
+                </span>
               )}
             </div>
             {project.description && (
@@ -378,6 +379,7 @@ export default function ProjectDetailPage() {
         {[
           { key: 'documents' as const, label: 'Documents', icon: FileText },
           { key: 'members' as const, label: `Members (${members.length})`, icon: Users },
+          { key: 'sub-projects' as const, label: `Sub-Projects${(project.subProjectCount ?? 0) > 0 ? ` (${project.subProjectCount})` : ''}`, icon: Layers },
           { key: 'plugins' as const, label: 'Plugins', icon: Plug },
           { key: 'workflow' as const, label: 'Workflow', icon: GitBranch },
           { key: 'retention' as const, label: 'Retention & Compliance', icon: Shield },
@@ -628,7 +630,18 @@ export default function ProjectDetailPage() {
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : plugin.activeInProject ? (
                       <><PowerOff className="h-3.5 w-3.5" /> Deactivate</>
-          Sub-Projects Tab */}
+                    ) : (
+                      <><Power className="h-3.5 w-3.5" /> Activate</>
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sub-Projects Tab */}
       {activeTab === 'sub-projects' && (
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="flex items-center justify-between mb-6">
@@ -725,17 +738,6 @@ export default function ProjectDetailPage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/*           ) : (
-                      <><Power className="h-3.5 w-3.5" /> Activate</>
-                    )}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
@@ -955,33 +957,13 @@ export default function ProjectDetailPage() {
                             <thead className="bg-slate-50">
                               <tr>
                                 <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Category</th>
-                                <th className="texFeatures</span>
-              <div className="flex items-center gap-3 mt-1">
-                <button onClick={handleToggleAi} disabled={togglingAi}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    project.aiEnabled ? 'bg-purple-600' : 'bg-slate-300'
-                  } ${togglingAi ? 'opacity-50' : ''}`}>
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    project.aiEnabled ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
-                </button>
-                <span className={`text-sm font-medium ${project.aiEnabled ? 'text-purple-700' : 'text-slate-500'}`}>
-                  {togglingAi ? 'Saving...' : project.aiEnabled ? 'Enabled' : 'Disabled'}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1">Only the project owner or system admin can toggle this</p>
-            </div>
-            <div>
-              <span className="text-slate-400">Status</span>
-              <p className="text-slate-600 mt-1">{project.isActive ? 'Active' : 'Inactive'}</p>
-            </div>
-            {project.parentProjectName && (
-              <div>
-                <span className="text-slate-400">Parent Project</span>
-                <button onClick={() => router.push(`/projects/${project.parentProjectId}`)}
-                  className="block text-sm text-primary-600 hover:underline mt-1">{project.parentProjectName}</button>
-              </div>
-            )}          <tbody>
+                                <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Min. Retention</th>
+                                <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Legal Framework</th>
+                                <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Citation</th>
+                                <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
                               {rules.map(r => (
                                 <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50">
                                   <td className="py-2.5 px-3">
@@ -1095,13 +1077,33 @@ export default function ProjectDetailPage() {
       {showUpload && (
         <UploadModal
           folderId={currentFolder}
-          projectId={projectId}
-          onClose={() => setShowUpload(false)}
-          onComplete={() => { setShowUpload(false); loadDocuments(); }}
-        />
-      )}
-
-      {/* Add Member Modal */}
+          projectId={projectId}Features</span>
+              <div className="flex items-center gap-3 mt-1">
+                <button onClick={handleToggleAi} disabled={togglingAi}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    project.aiEnabled ? 'bg-purple-600' : 'bg-slate-300'
+                  } ${togglingAi ? 'opacity-50' : ''}`}>
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    project.aiEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+                <span className={`text-sm font-medium ${project.aiEnabled ? 'text-purple-700' : 'text-slate-500'}`}>
+                  {togglingAi ? 'Saving...' : project.aiEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">Only the project owner or system admin can toggle this</p>
+            </div>
+            <div>
+              <span className="text-slate-400">Status</span>
+              <p className="text-slate-600 mt-1">{project.isActive ? 'Active' : 'Inactive'}</p>
+            </div>
+            {project.parentProjectName && (
+              <div>
+                <span className="text-slate-400">Parent Project</span>
+                <button onClick={() => router.push(`/projects/${project.parentProjectId}`)}
+                  className="block text-sm text-primary-600 hover:underline mt-1">{project.parentProjectName}</button>
+              </div>
+            )}er Modal */}
       {showAddMember && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4">
