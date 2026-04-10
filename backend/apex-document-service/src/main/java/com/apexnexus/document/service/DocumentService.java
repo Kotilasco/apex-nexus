@@ -55,6 +55,47 @@ public class DocumentService {
         // Store encrypted file in MinIO
         storageService.storeFile(fileData, storageKey, file.getContentType());
 
+        // Resolve retention/compliance defaults from project settings
+        int retentionYears = request.getRetentionPeriodYears() != null ? request.getRetentionPeriodYears() : 20;
+        boolean privacyRedaction = false;
+
+        if (request.getProjectId() != null) {
+            try {
+                Map<String, Object> project = jdbcTemplate.queryForMap(
+                    "SELECT default_retention_period_years, privacy_redaction_enabled, " +
+                    "jurisdiction_code FROM projects WHERE id = ?",
+                    request.getProjectId());
+
+                Integer projectRetention = (Integer) project.get("default_retention_period_years");
+                if (projectRetention != null && projectRetention > retentionYears) {
+                    retentionYears = projectRetention;
+                }
+
+                Boolean projectPrivacy = (Boolean) project.get("privacy_redaction_enabled");
+                if (Boolean.TRUE.equals(projectPrivacy)) {
+                    privacyRedaction = true;
+                }
+
+                // Apply jurisdiction minimum retention if project has a jurisdiction
+                String jurisdictionCode = (String) project.get("jurisdiction_code");
+                if (jurisdictionCode != null && !jurisdictionCode.isBlank()) {
+                    try {
+                        Integer minRetention = jdbcTemplate.queryForObject(
+                            "SELECT MAX(jrr.min_retention_years) FROM jurisdiction_retention_rules jrr " +
+                            "JOIN jurisdictions j ON jrr.jurisdiction_id = j.id WHERE j.code = ?",
+                            Integer.class, jurisdictionCode);
+                        if (minRetention != null && minRetention > retentionYears) {
+                            retentionYears = minRetention;
+                        }
+                    } catch (Exception e) {
+                        log.debug("No jurisdiction retention rules found for {}", jurisdictionCode);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Could not look up project {} for retention defaults", request.getProjectId(), e);
+            }
+        }
+
         Document doc = Document.builder()
                 .objectGuid(objectGuid)
                 .folderId(request.getFolderId())
@@ -69,8 +110,9 @@ public class DocumentService {
                 .authorId(authorId)
                 .tags(request.getTags())
                 .metadataJson(request.getMetadata() != null ? request.getMetadata() : new HashMap<>())
-                .retentionPeriodYears(request.getRetentionPeriodYears() != null ? request.getRetentionPeriodYears() : 20)
+                .retentionPeriodYears(retentionYears)
                 .retentionStartDate(Instant.now())
+                .privacyRedactionEnabled(privacyRedaction)
                 .build();
 
         doc = documentRepository.save(doc);
