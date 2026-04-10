@@ -714,27 +714,26 @@ export default function ProjectDetailPage() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Sub-Project Name *</label>
                 <input value={subForm.name} onChange={e => setSubForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g., Phase 1 Documents" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none" />
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                  placeholder="Enter sub-project name..." autoFocus />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
                 <textarea value={subForm.description} onChange={e => setSubForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Describe this sub-project..." rows={3}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none" />
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none"
+                  rows={3} placeholder="Optional description..." />
               </div>
-              <div className="flex items-center gap-3">
-                <input type="checkbox" id="subAiEnabled" checked={subForm.aiEnabled}
-                  onChange={e => setSubForm(f => ({ ...f, aiEnabled: e.target.checked }))}
-                  className="h-4 w-4 text-primary-600 rounded border-slate-300" />
-                <label htmlFor="subAiEnabled" className="text-sm text-slate-700">Enable AI features</label>
-              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={subForm.aiEnabled} onChange={e => setSubForm(f => ({ ...f, aiEnabled: e.target.checked }))}
+                  className="rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
+                <span className="text-sm text-slate-700">Enable AI for this sub-project</span>
+              </label>
             </div>
-            <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-200">
+            <div className="flex justify-end gap-2 p-5 border-t border-slate-200">
               <button onClick={() => setShowCreateSub(false)} className="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50">Cancel</button>
               <button onClick={handleCreateSubProject} disabled={subCreateLoading || !subForm.name.trim()}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
-                {subCreateLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Create
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
+                {subCreateLoading && <Loader2 className="h-4 w-4 animate-spin" />} Create
               </button>
             </div>
           </div>
@@ -747,8 +746,13 @@ export default function ProjectDetailPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-sm font-semibold text-slate-700">Default Workflow</h3>
-              <p className="text-xs text-slate-400 mt-1">Set a default workflow for all documents in this project. Documents inherit this workflow but can use a more restrictive one.</p>
+              <p className="text-xs text-slate-400 mt-1">Set the default approval workflow for new documents in this project.</p>
             </div>
+            {wfSaved && (
+              <span className="flex items-center gap-1 text-green-600 text-xs font-medium">
+                <CheckCircle2 className="h-4 w-4" /> Saved
+              </span>
+            )}
           </div>
 
           {wfLoading ? (
@@ -756,83 +760,37 @@ export default function ProjectDetailPage() {
               <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* Workflow Selector */}
-              <div className="max-w-md">
-                <label className="block text-sm font-medium text-slate-700 mb-2">Workflow Type</label>
-                <select value={selectedWfId} onChange={e => { setSelectedWfId(e.target.value); setWfSaved(false); }}
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
-                  <option value="">No default workflow</option>
-                  {workflowDefs.map(d => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Workflow Definition</label>
+                <select value={selectedWfId} onChange={e => setSelectedWfId(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
+                  <option value="">None (no default workflow)</option>
+                  {workflowDefs.map(wf => (
+                    <option key={wf.id} value={wf.id}>{wf.name} — {wf.steps?.length ?? 0} steps</option>
                   ))}
                 </select>
               </div>
 
-              {/* Save Button */}
-              <div className="flex items-center gap-3">
-                <button onClick={handleSaveDefaultWorkflow} disabled={savingWf}
-                  className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
-                  {savingWf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Save
-                </button>
-                {wfSaved && (
-                  <span className="text-sm text-green-600 flex items-center gap-1">
-                    <CheckCircle2 className="h-4 w-4" /> Saved
-                  </span>
-                )}
-              </div>
-
-              {/* Selected Workflow Details */}
-              {selectedWfId && (() => {
-                const def = workflowDefs.find(d => d.id === selectedWfId);
-                if (!def) return null;
-                return (
-                  <div className="border border-slate-200 rounded-xl p-5 bg-slate-50 space-y-4">
-                    <div>
-                      <h4 className="text-sm font-semibold text-slate-800">{def.name}</h4>
-                      {def.description && <p className="text-xs text-slate-500 mt-1">{def.description}</p>}
-                    </div>
-
-                    {/* States */}
-                    {Array.isArray(def.states) && def.states.length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium text-slate-500 mb-2">Allowed States</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {def.states.map((s: string) => (
-                            <span key={s} className="px-2.5 py-1 bg-white border border-slate-200 text-slate-700 text-xs rounded-lg font-medium">{s}</span>
-                          ))}
-                        </div>
+              {selectedWfId && workflowDefs.find(w => w.id === selectedWfId) && (
+                <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                  <h4 className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1"><Info className="h-3.5 w-3.5" /> Workflow Steps</h4>
+                  <div className="space-y-2">
+                    {workflowDefs.find(w => w.id === selectedWfId)!.steps?.map((step, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        <span className="h-5 w-5 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-[10px]">{i + 1}</span>
+                        <span className="text-slate-700 font-medium">{step.name}</span>
+                        <span className="text-slate-400">— {step.type}</span>
                       </div>
-                    )}
-
-                    {/* Transitions */}
-                    {Array.isArray(def.transitions) && def.transitions.length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium text-slate-500 mb-2">Transitions</p>
-                        <div className="space-y-1.5">
-                          {def.transitions.map((t: { from: string; to: string; action: string; requiredRole?: string }, i: number) => (
-                            <div key={i} className="flex items-center gap-2 text-xs">
-                              <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-medium text-slate-700">{t.from}</span>
-                              <span className="text-slate-400">→</span>
-                              <span className="text-primary-600 font-medium">{t.action}</span>
-                              <span className="text-slate-400">→</span>
-                              <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-medium text-slate-700">{t.to}</span>
-                              {t.requiredRole && <span className="text-slate-400 ml-1">(role: {t.requiredRole})</span>}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Info Banner */}
-                    <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-blue-700">Documents in this project will default to this workflow. When starting a workflow on a document, only workflows with equal or more restrictive states/transitions than this default will be allowed.</p>
-                    </div>
+                    ))}
                   </div>
-                );
-              })()}
+                </div>
+              )}
+
+              <button onClick={handleSaveDefaultWorkflow} disabled={savingWf}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
+                {savingWf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Workflow Setting
+              </button>
             </div>
           )}
         </div>
@@ -840,234 +798,174 @@ export default function ProjectDetailPage() {
 
       {/* Retention & Compliance Tab */}
       {activeTab === 'retention' && (
-        <div className="space-y-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700">Retention & Compliance</h3>
+              <p className="text-xs text-slate-400 mt-1">Configure document retention policies, jurisdiction rules, and privacy settings.</p>
+            </div>
+            {retentionSaved && (
+              <span className="flex items-center gap-1 text-green-600 text-xs font-medium">
+                <CheckCircle2 className="h-4 w-4" /> Saved
+              </span>
+            )}
+          </div>
+
           {retentionLoading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
             </div>
           ) : (
-            <>
-              {/* Retention Settings */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <div className="flex items-center gap-2 mb-6">
-                  <Clock className="h-5 w-5 text-primary-600" />
-                  <h3 className="text-sm font-semibold text-slate-700">Default Retention Policy</h3>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Default Retention Period */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Default Retention Period (Years)</label>
-                    <input type="number" min={0} max={999}
-                      value={retentionForm.defaultRetentionPeriodYears || ''}
-                      onChange={e => setRetentionForm(f => ({ ...f, defaultRetentionPeriodYears: parseInt(e.target.value) || 0 }))}
-                      placeholder="e.g. 7"
-                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none" />
-                    <p className="text-xs text-slate-400 mt-1">Documents must have retention ≥ this value</p>
-                  </div>
-
-                  {/* Compliance Category */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Compliance Category</label>
-                    <select value={retentionForm.complianceCategory}
-                      onChange={e => setRetentionForm(f => ({ ...f, complianceCategory: e.target.value }))}
-                      className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
-                      <option value="">None</option>
-                      {documentCategories.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Allowed Document Types */}
-                <div className="mt-6">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Allowed Document Types</label>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {(retentionForm.retentionDocumentTypes || []).map(t => (
-                      <span key={t} className="px-3 py-1 bg-primary-50 text-primary-700 text-xs font-medium rounded-full flex items-center gap-1.5 border border-primary-200">
-                        {t}
-                        <button onClick={() => setRetentionForm(f => ({ ...f, retentionDocumentTypes: f.retentionDocumentTypes.filter(x => x !== t) }))}
-                          className="hover:text-red-600"><X className="h-3 w-3" /></button>
-                      </span>
-                    ))}
-                    {(retentionForm.retentionDocumentTypes || []).length === 0 && (
-                      <span className="text-xs text-slate-400">All document types allowed</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select value={newDocType} onChange={e => setNewDocType(e.target.value)}
-                      className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
-                      <option value="">Add type...</option>
-                      {documentCategories.filter(c => !(retentionForm.retentionDocumentTypes || []).includes(c)).map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                    <button onClick={() => {
-                      if (newDocType) {
-                        setRetentionForm(f => ({ ...f, retentionDocumentTypes: [...f.retentionDocumentTypes, newDocType] }));
-                        setNewDocType('');
-                      }
-                    }} disabled={!newDocType}
-                      className="px-3 py-2 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700 disabled:opacity-50">
-                      Add
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Jurisdiction & Compliance */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <div className="flex items-center gap-2 mb-6">
-                  <BookOpen className="h-5 w-5 text-primary-600" />
-                  <h3 className="text-sm font-semibold text-slate-700">Jurisdiction & Compliance</h3>
-                </div>
-
-                <div className="max-w-md">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Jurisdiction</label>
-                  <select value={retentionForm.jurisdictionCode}
-                    onChange={e => setRetentionForm(f => ({ ...f, jurisdictionCode: e.target.value }))}
-                    className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
-                    <option value="">No jurisdiction selected</option>
+            <div className="space-y-6">
+              {/* Jurisdiction & Retention Period */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> Jurisdiction</label>
+                  <select value={retentionForm.jurisdictionCode} onChange={e => setRetentionForm(f => ({ ...f, jurisdictionCode: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
+                    <option value="">None selected</option>
                     {jurisdictions.map(j => (
-                      <option key={j.code} value={j.code}>{j.name} ({j.code}) — {j.region}</option>
+                      <option key={j.code} value={j.code}>{j.name} ({j.code})</option>
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Default Retention (years)</label>
+                  <input type="number" min={0} max={100} value={retentionForm.defaultRetentionPeriodYears}
+                    onChange={e => setRetentionForm(f => ({ ...f, defaultRetentionPeriodYears: parseInt(e.target.value) || 0 }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none" />
+                </div>
+              </div>
 
-                {/* Show rules for selected jurisdiction */}
-                {retentionForm.jurisdictionCode && (() => {
-                  const selectedJ = jurisdictions.find(j => j.code === retentionForm.jurisdictionCode);
-                  const rules = retentionRules.filter(r => r.jurisdictionCode === retentionForm.jurisdictionCode);
-                  return (
-                    <div className="mt-6 space-y-4">
-                      {selectedJ && (
-                        <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                          <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                          <p className="text-xs text-blue-700">
-                            Compliance jurisdiction: <strong>{selectedJ.name}</strong> ({selectedJ.region}).
-                            Documents in this project will be governed by the retention rules below.
-                          </p>
-                        </div>
-                      )}
-
-                      {rules.length > 0 ? (
-                        <div className="border border-slate-200 rounded-lg overflow-hidden">
-                          <table className="w-full text-sm">
-                            <thead className="bg-slate-50">
-                              <tr>
-                                <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Category</th>
-                                <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Min. Retention</th>
-                                <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Legal Framework</th>
-                                <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Citation</th>
-                                <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {rules.map(r => (
-                                <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50">
-                                  <td className="py-2.5 px-3">
-                                    <span className="px-2 py-0.5 bg-amber-50 text-amber-700 text-xs font-medium rounded border border-amber-200">{r.documentCategory}</span>
-                                  </td>
-                                  <td className="py-2.5 px-3 text-slate-700 font-medium">{r.minRetentionYears} yrs</td>
-                                  <td className="py-2.5 px-3 text-slate-500 text-xs">{r.legalFrameworkName || r.legalFrameworkCode}</td>
-                                  <td className="py-2.5 px-3 text-slate-500 text-xs max-w-[200px] truncate">{r.legalCitation}</td>
-                                  <td className="py-2.5 px-3">
-                                    {r.isMandatory ? (
-                                      <span className="px-2 py-0.5 bg-red-50 text-red-600 text-xs font-medium rounded border border-red-200">Required</span>
-                                    ) : (
-                                      <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-xs rounded">Optional</span>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-400">No retention rules found for this jurisdiction</p>
-                      )}
-
-                      {/* Penalty Info */}
-                      {rules.filter(r => r.penaltyInfo).length > 0 && (
-                        <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                          <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                          <div className="text-xs text-amber-700 space-y-1">
-                            <p className="font-medium">Non-Compliance Penalties:</p>
-                            {rules.filter(r => r.penaltyInfo).map(r => (
-                              <p key={r.id}>• <strong>{r.documentCategory}:</strong> {r.penaltyInfo}</p>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+              {/* Compliance Category */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1"><Shield className="h-3.5 w-3.5" /> Compliance Category</label>
+                <select value={retentionForm.complianceCategory} onChange={e => setRetentionForm(f => ({ ...f, complianceCategory: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
+                  <option value="">None</option>
+                  <option value="GDPR">GDPR</option>
+                  <option value="HIPAA">HIPAA</option>
+                  <option value="SOX">SOX</option>
+                  <option value="ISO27001">ISO 27001</option>
+                  <option value="PCI_DSS">PCI DSS</option>
+                  <option value="SOC2">SOC 2</option>
+                </select>
               </div>
 
               {/* Privacy Redaction */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <Lock className="h-5 w-5 text-primary-600" />
-                  <h3 className="text-sm font-semibold text-slate-700">Privacy Redaction</h3>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={retentionForm.privacyRedactionEnabled}
+                  onChange={e => setRetentionForm(f => ({ ...f, privacyRedactionEnabled: e.target.checked }))}
+                  className="rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
+                <span className="text-sm text-slate-700 flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Enable privacy redaction for sensitive fields</span>
+              </label>
+
+              {/* Document Types */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Retention Document Types</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {retentionForm.retentionDocumentTypes.map(dt => (
+                    <span key={dt} className="px-2.5 py-1 bg-primary-50 text-primary-700 text-xs font-medium rounded-full flex items-center gap-1">
+                      {dt}
+                      <button onClick={() => setRetentionForm(f => ({ ...f, retentionDocumentTypes: f.retentionDocumentTypes.filter(t => t !== dt) }))}
+                        className="hover:text-red-600"><X className="h-3 w-3" /></button>
+                    </span>
+                  ))}
                 </div>
-
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <div className="relative">
-                    <input type="checkbox" checked={retentionForm.privacyRedactionEnabled}
-                      onChange={e => setRetentionForm(f => ({ ...f, privacyRedactionEnabled: e.target.checked }))}
-                      className="sr-only peer" />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-slate-700">Enable Privacy Redaction</span>
-                    <p className="text-xs text-slate-400 mt-0.5">When enabled, documents in this project can have personal data automatically identified and redacted. This serves as the project default — individual documents can override.</p>
-                  </div>
-                </label>
+                <div className="flex items-center gap-2">
+                  <select value={newDocType} onChange={e => setNewDocType(e.target.value)}
+                    className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
+                    <option value="">Add category...</option>
+                    {documentCategories.filter(c => !retentionForm.retentionDocumentTypes.includes(c)).map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <button onClick={() => { if (newDocType) { setRetentionForm(f => ({ ...f, retentionDocumentTypes: [...f.retentionDocumentTypes, newDocType] })); setNewDocType(''); } }}
+                    disabled={!newDocType}
+                    className="px-3 py-1.5 bg-primary-600 text-white text-xs rounded-lg hover:bg-primary-700 disabled:opacity-50">
+                    Add
+                  </button>
+                </div>
               </div>
 
-              {/* Save Button */}
-              <div className="flex items-center gap-3">
-                <button onClick={handleSaveRetention} disabled={savingRetention}
-                  className="px-5 py-2.5 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
-                  {savingRetention ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Save Retention & Compliance Settings
-                </button>
-                {retentionSaved && (
-                  <span className="text-sm text-green-600 flex items-center gap-1">
-                    <CheckCircle2 className="h-4 w-4" /> Settings saved
-                  </span>
-                )}
-              </div>
-            </>
+              {/* Jurisdiction Rules Table */}
+              {retentionRules.length > 0 && retentionForm.jurisdictionCode && (
+                <div>
+                  <h4 className="text-sm font-medium text-slate-700 mb-2 flex items-center gap-1">
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> Jurisdiction Retention Rules ({retentionForm.jurisdictionCode})
+                  </h4>
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-500 text-left">
+                          <th className="px-3 py-2 font-medium">Document Type</th>
+                          <th className="px-3 py-2 font-medium">Min Retention</th>
+                          <th className="px-3 py-2 font-medium">Legal Basis</th>
+                          <th className="px-3 py-2 font-medium">Mandatory</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {retentionRules.filter(r => r.jurisdictionCode === retentionForm.jurisdictionCode).map(rule => (
+                          <tr key={rule.id} className="border-t border-slate-100">
+                            <td className="px-3 py-2 text-slate-700 font-medium">{rule.documentType}</td>
+                            <td className="px-3 py-2 text-slate-500">{rule.minimumRetentionYears} years</td>
+                            <td className="px-3 py-2 text-slate-500">{rule.legalBasis || '—'}</td>
+                            <td className="px-3 py-2">{rule.mandatory ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <span className="text-slate-300">—</span>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <button onClick={handleSaveRetention} disabled={savingRetention}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
+                {savingRetention ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Compliance Settings
+              </button>
+            </div>
           )}
         </div>
       )}
 
       {/* Settings Tab */}
       {activeTab === 'settings' && (
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="text-sm font-semibold text-slate-700 mb-4">Project Settings</h3>
-          <div className="grid grid-cols-2 gap-6 text-sm">
-            <div>
-              <span className="text-slate-400">Project ID</span>
-              <p className="font-mono text-xs text-slate-600 mt-1">{project.id}</p>
+        <div className="space-y-4">
+          {/* AI Toggle */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${project.aiEnabled ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-400'}`}>
+                  <Brain className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-700">AI Features</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Enable AI-powered document analysis, classification, and anomaly detection for this project.</p>
+                </div>
+              </div>
+              <button onClick={handleToggleAi} disabled={togglingAi}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                  project.aiEnabled ? 'bg-purple-600' : 'bg-slate-300'
+                } disabled:opacity-50`}>
+                {togglingAi ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-white absolute left-1/2 -translate-x-1/2" />
+                ) : (
+                  <span className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${project.aiEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                )}
+              </button>
             </div>
-            <div>
-              <span className="text-slate-400">Owner</span>
-              <p className="text-sm text-slate-600 mt-1">{project.ownerName || project.ownerId}</p>
-            </div>
-            <div>
-              <span className="text-slate-400">AI Enabled</span>
-              <p className="text-slate-600 mt-1">{project.aiEnabled ? 'Yes' : 'No'}</p>
-            </div>
-            <div>
-              <span className="text-slate-400">Status</span>
-              <p className="text-slate-600 mt-1">{project.isActive ? 'Active' : 'Inactive'}</p>
-            </div>
-            <div>
-              <span className="text-slate-400">Created</span>
-              <p className="text-slate-600 mt-1">{formatDateTime(project.createdAt)}</p>
+          </div>
+
+          {/* Project Info */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="text-sm font-semibold text-slate-700 mb-4">Project Information</h3>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div><span className="text-slate-400">ID</span><p className="text-slate-700 font-mono text-xs mt-0.5">{project.id}</p></div>
+              <div><span className="text-slate-400">Status</span><p className="text-slate-700 mt-0.5">{project.status}</p></div>
+              <div><span className="text-slate-400">Created</span><p className="text-slate-700 mt-0.5">{formatDateTime(project.createdAt)}</p></div>
+              <div><span className="text-slate-400">Updated</span><p className="text-slate-700 mt-0.5">{formatDateTime(project.updatedAt)}</p></div>
+              <div><span className="text-slate-400">Organization</span><p className="text-slate-700 mt-0.5">{project.organizationId}</p></div>
+              <div><span className="text-slate-400">Members</span><p className="text-slate-700 mt-0.5">{project.memberCount ?? members.length}</p></div>
             </div>
           </div>
         </div>
@@ -1075,90 +973,50 @@ export default function ProjectDetailPage() {
 
       {/* Upload Modal */}
       {showUpload && (
-        <UploadModal
-          folderId={currentFolder}
-          projectId={projectId}Features</span>
-              <div className="flex items-center gap-3 mt-1">
-                <button onClick={handleToggleAi} disabled={togglingAi}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    project.aiEnabled ? 'bg-purple-600' : 'bg-slate-300'
-                  } ${togglingAi ? 'opacity-50' : ''}`}>
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    project.aiEnabled ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
-                </button>
-                <span className={`text-sm font-medium ${project.aiEnabled ? 'text-purple-700' : 'text-slate-500'}`}>
-                  {togglingAi ? 'Saving...' : project.aiEnabled ? 'Enabled' : 'Disabled'}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1">Only the project owner or system admin can toggle this</p>
-            </div>
-            <div>
-              <span className="text-slate-400">Status</span>
-              <p className="text-slate-600 mt-1">{project.isActive ? 'Active' : 'Inactive'}</p>
-            </div>
-            {project.parentProjectName && (
-              <div>
-                <span className="text-slate-400">Parent Project</span>
-                <button onClick={() => router.push(`/projects/${project.parentProjectId}`)}
-                  className="block text-sm text-primary-600 hover:underline mt-1">{project.parentProjectName}</button>
-              </div>
-            )}er Modal */}
+        <UploadModal projectId={projectId} folderId={currentFolder} onClose={() => setShowUpload(false)}
+          onSuccess={() => { setShowUpload(false); loadDocuments(); }} />
+      )}
+
+      {/* Add Member Modal */}
       {showAddMember && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4">
             <div className="flex items-center justify-between p-5 border-b border-slate-200">
               <h3 className="text-lg font-semibold text-slate-900">Add Team Member</h3>
-              <button onClick={() => setShowAddMember(false)} className="p-1 rounded-lg hover:bg-slate-100"><X className="h-5 w-5" /></button>
+              <button onClick={() => setShowAddMember(false)} className="p-1 rounded-lg hover:bg-slate-100" title="Close"><X className="h-5 w-5" /></button>
             </div>
             <div className="p-5 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">User</label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Select User</label>
                 <select value={addMemberForm.userId} onChange={e => setAddMemberForm(f => ({ ...f, userId: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
-                  <option value="">Select a user...</option>
-                  {users.map(u => (
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
+                  <option value="">Choose a user...</option>
+                  {users.filter(u => !members.some(m => m.userId === u.id)).map(u => (
                     <option key={u.id} value={u.id}>{u.fullName || u.username} ({u.email})</option>
                   ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
-                <select value={addMemberForm.roleId} onChange={e => setAddMemberForm(f => ({ ...f, roleId: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
-                  <option value="viewer">Viewer</option>
-                  <option value="member">Member</option>
-                  <option value="editor">Editor</option>
-                  <option value="admin">Admin</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Permissions</label>
                 <div className="flex flex-wrap gap-2">
                   {permissionOptions.map(perm => (
-                    <label key={perm} className="flex items-center gap-1.5 text-xs">
+                    <label key={perm} className="flex items-center gap-1.5 text-xs cursor-pointer">
                       <input type="checkbox" checked={addMemberForm.permissions.includes(perm)}
                         onChange={e => {
-                          setAddMemberForm(f => ({
-                            ...f,
-                            permissions: e.target.checked
-                              ? [...f.permissions, perm]
-                              : f.permissions.filter(p => p !== perm),
-                          }));
+                          setAddMemberForm(f => ({ ...f, permissions: e.target.checked ? [...f.permissions, perm] : f.permissions.filter(p => p !== perm) }));
                         }}
-                        className="h-3.5 w-3.5 text-primary-600 rounded border-slate-300" />
+                        className="rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
                       <span className="text-slate-600">{perm}</span>
                     </label>
                   ))}
                 </div>
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-200">
+            <div className="flex justify-end gap-2 p-5 border-t border-slate-200">
               <button onClick={() => setShowAddMember(false)} className="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50">Cancel</button>
               <button onClick={handleAddMember} disabled={addMemberLoading || !addMemberForm.userId}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
-                {addMemberLoading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <UserPlus className="h-4 w-4" />}
-                Add Member
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
+                {addMemberLoading && <Loader2 className="h-4 w-4 animate-spin" />} Add Member
               </button>
             </div>
           </div>
