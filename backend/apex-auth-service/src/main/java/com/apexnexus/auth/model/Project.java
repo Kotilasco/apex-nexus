@@ -36,6 +36,9 @@ public class Project {
     @Builder.Default
     private Map<String, Object> metadataSchema = Map.of();
 
+    @Column(name = "parent_project_id")
+    private UUID parentProjectId;
+
     @Column(name = "ai_enabled")
     @Builder.Default
     private Boolean aiEnabled = true;

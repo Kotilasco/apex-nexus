@@ -291,7 +291,7 @@ export const projectApi = {
   list: () => api.get('/projects'),
   getMine: () => api.get('/projects/mine'),
   get: (id: string) => api.get(`/projects/${id}`),
-  create: (data: { name: string; description?: string; aiEnabled?: boolean; defaultWorkflowDefinitionId?: string;
+  create: (data: { name: string; description?: string; aiEnabled?: boolean; parentProjectId?: string; defaultWorkflowDefinitionId?: string;
     defaultRetentionPeriodYears?: number; retentionDocumentTypes?: string[]; jurisdictionCode?: string;
     privacyRedactionEnabled?: boolean; complianceCategory?: string }) =>
     api.post('/projects', data),
@@ -309,6 +309,10 @@ export const projectApi = {
     api.post(`/projects/${id}/plugins/${pluginId}/activate`),
   deactivatePlugin: (id: string, pluginId: string) =>
     api.post(`/projects/${id}/plugins/${pluginId}/deactivate`),
+  toggleAi: (id: string) =>
+    api.post(`/projects/${id}/ai/toggle`),
+  getSubProjects: (id: string) =>
+    api.get(`/projects/${id}/sub-projects`),
 };
 
 /* ── AI Governance ── */

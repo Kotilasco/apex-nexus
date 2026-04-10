@@ -151,6 +151,12 @@ export default function ProjectsPage() {
                       {project.aiEnabled && (
                         <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">AI Enabled</span>
                       )}
+                      {(project.subProjectCount ?? 0) > 0 && (
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">{project.subProjectCount} sub-project{project.subProjectCount !== 1 ? 's' : ''}</span>
+                      )}
+                      {project.parentProjectName && (
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-full">↳ {project.parentProjectName}</span>
+                      )}
                       {!project.isActive && (
                         <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-xs font-medium rounded-full">Inactive</span>
                       )}

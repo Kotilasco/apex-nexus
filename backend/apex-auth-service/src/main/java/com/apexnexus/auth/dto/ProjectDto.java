@@ -19,6 +19,9 @@ public class ProjectDto {
     private String description;
     private UUID ownerId;
     private String ownerName;
+    private UUID parentProjectId;
+    private String parentProjectName;
+    private int subProjectCount;
     private Map<String, Object> metadataSchema;
     private Boolean aiEnabled;
     private Boolean isActive;

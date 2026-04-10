@@ -84,6 +84,19 @@ public class ProjectController {
 
     // ====================== Project Plugins ======================
 
+    @PostMapping("/{id}/ai/toggle")
+    public ResponseEntity<ApiResponse<ProjectDto>> toggleAi(
+            @PathVariable UUID id,
+            Authentication authentication) {
+        UUID userId = (UUID) authentication.getPrincipal();
+        return ResponseEntity.ok(ApiResponse.ok("AI toggled", projectService.toggleAi(id, userId)));
+    }
+
+    @GetMapping("/{id}/sub-projects")
+    public ResponseEntity<ApiResponse<List<ProjectDto>>> getSubProjects(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(projectService.getSubProjects(id)));
+    }
+
     @GetMapping("/{id}/plugins")
     public ResponseEntity<ApiResponse<List<ProjectPluginDto>>> getProjectPlugins(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(projectService.getProjectPlugins(id)));

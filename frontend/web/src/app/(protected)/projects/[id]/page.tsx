@@ -10,7 +10,7 @@ import {
   FolderKanban, Plus, Users, FileText, Settings, ArrowLeft, X,
   ChevronRight, Home, Upload, FolderPlus, Download, UserPlus, UserMinus,
   Eye, Trash2, GitBranch, Save, Loader2, CheckCircle2, Info, Shield,
-  Clock, Lock, AlertTriangle, BookOpen, Plug, Power, PowerOff,
+  Clock, Lock, AlertTriangle, BookOpen, Plug, Power, PowerOff, Brain, Layers,
 } from 'lucide-react';
 import UploadModal from '@/components/documents/UploadModal';
 
@@ -39,7 +39,17 @@ export default function ProjectDetailPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [addMemberForm, setAddMemberForm] = useState({ userId: '', roleId: 'member', permissions: ['READ', 'WRITE'] });
   const [addMemberLoading, setAddMemberLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'documents' | 'members' | 'plugins' | 'workflow' | 'retention' | 'settings'>('documents');
+  const [activeTab, setActiveTab] = useState<'documents' | 'members' | 'sub-projects' | 'plugins' | 'workflow' | 'retention' | 'settings'>('documents');
+
+  // Sub-projects
+  const [subProjects, setSubProjects] = useState<Project[]>([]);
+  const [subProjectsLoading, setSubProjectsLoading] = useState(false);
+  const [showCreateSub, setShowCreateSub] = useState(false);
+  const [subForm, setSubForm] = useState({ name: '', description: '', aiEnabled: true });
+  const [subCreateLoading, setSubCreateLoading] = useState(false);
+
+  // AI toggle
+  const [togglingAi, setTogglingAi] = useState(false);
 
   // Plugin management
   const [projectPlugins, setProjectPlugins] = useState<ProjectPluginStatus[]>([]);
@@ -111,6 +121,15 @@ export default function ProjectDetailPage() {
     projectApi.getPlugins(projectId).then(res => {
       setProjectPlugins(res.data?.data ?? res.data ?? []);
     }).catch(() => {}).finally(() => setPluginsLoading(false));
+  }, [activeTab, projectId]);
+
+  // Load sub-projects when sub-projects tab is active
+  useEffect(() => {
+    if (activeTab !== 'sub-projects') return;
+    setSubProjectsLoading(true);
+    projectApi.getSubProjects(projectId).then(res => {
+      setSubProjects(res.data?.data ?? res.data ?? []);
+    }).catch(() => {}).finally(() => setSubProjectsLoading(false));
   }, [activeTab, projectId]);
 
   // Load workflow definitions when workflow tab is active
@@ -272,20 +291,52 @@ export default function ProjectDetailPage() {
   const toggleProjectPlugin = async (plugin: ProjectPluginStatus) => {
     setTogglingPlugin(plugin.pluginId);
     try {
-      if (plugin.activeInProject) {
+    
+
+  const handleToggleAi = async () => {
+    setTogglingAi(true);
+    try {
+      const res = await projectApi.toggleAi(projectId);
+      setProject(res.data?.data ?? res.data);
+    } catch { alert('Only the project owner or a system admin can toggle AI'); }
+    setTogglingAi(false);
+  };
+
+  const handleCreateSubProject = async () => {
+    if (!subForm.name.trim()) return;
+    setSubCreateLoading(true);
+    try {
+      await projectApi.create({ ...subForm, parentProjectId: projectId });
+      setShowCreateSub(false);
+      setSubForm({ name: '', description: '', aiEnabled: true });
+      const res = await projectApi.getSubProjects(projectId);
+      setSubProjects(res.data?.data ?? res.data ?? []);
+    } catch { alert('Failed to create sub-project'); }
+    setSubCreateLoading(false);
+  };  if (plugin.activeInProject) {
         await projectApi.deactivatePlugin(projectId, plugin.pluginId);
       } else {
         await projectApi.activatePlugin(projectId, plugin.pluginId);
-      }
-      const res = await projectApi.getPlugins(projectId);
-      setProjectPlugins(res.data?.data ?? res.data ?? []);
-    } catch { alert('Failed to toggle plugin'); }
-    setTogglingPlugin(null);
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-12">
+      }project.parentProjectId ? `/projects/${project.parentProjectId}` : '/projects')}
+            className="p-2 rounded-lg hover:bg-slate-100 text-slate-400" title="Back">
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+          <div>
+            {project.parentProjectName && (
+              <button onClick={() => router.push(`/projects/${project.parentProjectId}`)}
+                className="text-xs text-primary-600 hover:underline flex items-center gap-1 mb-0.5">
+                <Layers className="h-3 w-3" /> {project.parentProjectName}
+                <ChevronRight className="h-3 w-3" />
+              </button>
+            )}
+            <div className="flex items-center gap-3">
+              <FolderKanban className="h-6 w-6 text-primary-600" />
+              <h1 className="text-2xl font-bold text-slate-900">{project.name}</h1>
+              {project.aiEnabled && (
+                <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">AI</span>
+              )}
+              {(project.subProjectCount ?? 0) > 0 && (
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">{project.subProjectCount} sub-project{project.subProjectCount !== 1 ? 's' : ''}
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
       </div>
     );
@@ -294,7 +345,8 @@ export default function ProjectDetailPage() {
   if (!project) return null;
 
   return (
-    <div className="space-y-6">
+    <div classNamesub-projects' as const, label: `Sub-Projects${(project.subProjectCount ?? 0) > 0 ? ` (${project.subProjectCount})` : ''}`, icon: Layers },
+          { key: '="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -576,7 +628,107 @@ export default function ProjectDetailPage() {
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : plugin.activeInProject ? (
                       <><PowerOff className="h-3.5 w-3.5" /> Deactivate</>
-                    ) : (
+          Sub-Projects Tab */}
+      {activeTab === 'sub-projects' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700">Sub-Projects</h3>
+              <p className="text-xs text-slate-400 mt-1">Create and manage smaller projects nested under this project for better organisation.</p>
+            </div>
+            <button onClick={() => setShowCreateSub(true)}
+              className="px-3 py-1.5 bg-primary-600 text-white text-xs font-medium rounded-lg hover:bg-primary-700 flex items-center gap-1.5">
+              <Plus className="h-3.5 w-3.5" /> New Sub-Project
+            </button>
+          </div>
+
+          {subProjectsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
+            </div>
+          ) : subProjects.length === 0 ? (
+            <div className="text-center py-8">
+              <Layers className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm text-slate-500 mb-3">No sub-projects yet</p>
+              <button onClick={() => setShowCreateSub(true)}
+                className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 inline-flex items-center gap-2">
+                <Plus className="h-4 w-4" /> Create Sub-Project
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {subProjects.map(sub => (
+                <div key={sub.id}
+                  className="flex items-center justify-between rounded-lg px-4 py-3 border border-slate-200 hover:border-primary-300 transition cursor-pointer"
+                  onClick={() => router.push(`/projects/${sub.id}`)}>
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="h-10 w-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                      <FolderKanban className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-slate-800">{sub.name}</p>
+                        {sub.aiEnabled && (
+                          <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded font-medium">AI</span>
+                        )}
+                        {(sub.subProjectCount ?? 0) > 0 && (
+                          <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded font-medium">{sub.subProjectCount} sub</span>
+                        )}
+                      </div>
+                      {sub.description && <p className="text-xs text-slate-400 truncate">{sub.description}</p>}
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {sub.memberCount ?? 0} members &middot; Created {formatDateTime(sub.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-slate-300" />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Create Sub-Project Modal */}
+      {showCreateSub && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4">
+            <div className="flex items-center justify-between p-5 border-b border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-900">Create Sub-Project</h3>
+              <button onClick={() => setShowCreateSub(false)} className="p-1 rounded-lg hover:bg-slate-100" title="Close"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Sub-Project Name *</label>
+                <input value={subForm.name} onChange={e => setSubForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="e.g., Phase 1 Documents" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                <textarea value={subForm.description} onChange={e => setSubForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Describe this sub-project..." rows={3}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none" />
+              </div>
+              <div className="flex items-center gap-3">
+                <input type="checkbox" id="subAiEnabled" checked={subForm.aiEnabled}
+                  onChange={e => setSubForm(f => ({ ...f, aiEnabled: e.target.checked }))}
+                  className="h-4 w-4 text-primary-600 rounded border-slate-300" />
+                <label htmlFor="subAiEnabled" className="text-sm text-slate-700">Enable AI features</label>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-200">
+              <button onClick={() => setShowCreateSub(false)} className="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50">Cancel</button>
+              <button onClick={handleCreateSubProject} disabled={subCreateLoading || !subForm.name.trim()}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
+                {subCreateLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/*           ) : (
                       <><Power className="h-3.5 w-3.5" /> Activate</>
                     )}
                   </button>
@@ -803,13 +955,33 @@ export default function ProjectDetailPage() {
                             <thead className="bg-slate-50">
                               <tr>
                                 <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Category</th>
-                                <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Min Years</th>
-                                <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Framework</th>
-                                <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Citation</th>
-                                <th className="text-left py-2.5 px-3 font-medium text-slate-600 text-xs">Mandatory</th>
-                              </tr>
-                            </thead>
-                            <tbody>
+                                <th className="texFeatures</span>
+              <div className="flex items-center gap-3 mt-1">
+                <button onClick={handleToggleAi} disabled={togglingAi}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    project.aiEnabled ? 'bg-purple-600' : 'bg-slate-300'
+                  } ${togglingAi ? 'opacity-50' : ''}`}>
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    project.aiEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`} />
+                </button>
+                <span className={`text-sm font-medium ${project.aiEnabled ? 'text-purple-700' : 'text-slate-500'}`}>
+                  {togglingAi ? 'Saving...' : project.aiEnabled ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">Only the project owner or system admin can toggle this</p>
+            </div>
+            <div>
+              <span className="text-slate-400">Status</span>
+              <p className="text-slate-600 mt-1">{project.isActive ? 'Active' : 'Inactive'}</p>
+            </div>
+            {project.parentProjectName && (
+              <div>
+                <span className="text-slate-400">Parent Project</span>
+                <button onClick={() => router.push(`/projects/${project.parentProjectId}`)}
+                  className="block text-sm text-primary-600 hover:underline mt-1">{project.parentProjectName}</button>
+              </div>
+            )}          <tbody>
                               {rules.map(r => (
                                 <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50">
                                   <td className="py-2.5 px-3">

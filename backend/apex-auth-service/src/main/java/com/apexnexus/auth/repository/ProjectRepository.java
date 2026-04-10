@@ -14,4 +14,7 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
     List<Project> findByOwnerIdAndIsActiveTrue(UUID ownerId);
     List<Project> findByIsActiveTrue();
     boolean existsByName(String name);
+    List<Project> findByParentProjectIdAndIsActiveTrue(UUID parentProjectId);
+    int countByParentProjectIdAndIsActiveTrue(UUID parentProjectId);
+    List<Project> findByParentProjectIdIsNullAndIsActiveTrue();
 }

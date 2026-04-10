@@ -169,6 +169,9 @@ export interface Project {
   description: string;
   ownerId: string;
   ownerName?: string;
+  parentProjectId?: string;
+  parentProjectName?: string;
+  subProjectCount?: number;
   aiEnabled: boolean;
   isActive: boolean;
   defaultWorkflowDefinitionId?: string;

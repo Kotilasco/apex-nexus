@@ -17,6 +17,7 @@ public class CreateProjectRequest {
     @NotBlank(message = "Project name is required")
     private String name;
     private String description;
+    private UUID parentProjectId;
     private Map<String, Object> metadataSchema;
     private Boolean aiEnabled;
     private UUID defaultWorkflowDefinitionId;

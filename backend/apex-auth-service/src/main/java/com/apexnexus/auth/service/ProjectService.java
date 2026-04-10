@@ -56,10 +56,18 @@ public class ProjectService {
             throw new ConflictException("Project name already exists: " + request.getName());
         }
 
+        // If creating a sub-project, validate parent exists
+        if (request.getParentProjectId() != null) {
+            if (!projectRepository.existsById(request.getParentProjectId())) {
+                throw new ResourceNotFoundException("Project", "id", request.getParentProjectId());
+            }
+        }
+
         Project project = Project.builder()
                 .name(request.getName())
                 .description(request.getDescription())
                 .ownerId(ownerId)
+                .parentProjectId(request.getParentProjectId())
                 .metadataSchema(request.getMetadataSchema() != null ? request.getMetadataSchema() : Map.of())
                 .aiEnabled(request.getAiEnabled() != null ? request.getAiEnabled() : true)
                 .defaultWorkflowDefinitionId(request.getDefaultWorkflowDefinitionId())
@@ -322,6 +330,46 @@ public class ProjectService {
                 .activatedAt(pp != null ? pp.getActivatedAt() : null).build();
     }
 
+    // ====================== AI Toggle ======================
+
+    @Transactional
+    public ProjectDto toggleAi(UUID projectId, UUID userId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
+
+        // Only owner or SYSTEM_ADMIN can toggle AI
+        boolean isOwner = project.getOwnerId().equals(userId);
+        boolean isAdmin = isSystemAdmin(userId);
+        if (!isOwner && !isAdmin) {
+            throw new BusinessException("Only the project owner or a system admin can toggle AI");
+        }
+
+        project.setAiEnabled(!Boolean.TRUE.equals(project.getAiEnabled()));
+        project = projectRepository.save(project);
+
+        auditPublisher.publish(AuditEvent.builder()
+                .userId(userId)
+                .action(project.getAiEnabled() ? "PROJECT_AI_ENABLED" : "PROJECT_AI_DISABLED")
+                .resourceType("PROJECT")
+                .resourceId(project.getId())
+                .resourceName(project.getName())
+                .build());
+
+        log.info("AI {} for project {} by user {}", project.getAiEnabled() ? "enabled" : "disabled", project.getName(), userId);
+        return toDto(project);
+    }
+
+    // ====================== Sub-Projects ======================
+
+    @Transactional(readOnly = true)
+    public List<ProjectDto> getSubProjects(UUID parentProjectId) {
+        if (!projectRepository.existsById(parentProjectId)) {
+            throw new ResourceNotFoundException("Project", "id", parentProjectId);
+        }
+        return projectRepository.findByParentProjectIdAndIsActiveTrue(parentProjectId)
+                .stream().map(this::toDto).collect(Collectors.toList());
+    }
+
     // ====================== Helpers ======================
 
     private List<String> decodePermissions(long mask) {
@@ -340,11 +388,24 @@ public class ProjectService {
                 .orElseThrow(() -> new BusinessException("SYSTEM_ADMIN role not found"));
     }
 
+    private boolean isSystemAdmin(UUID userId) {
+        UUID adminRoleId = roleRepository.findByName("SYSTEM_ADMIN").map(Role::getId).orElse(null);
+        if (adminRoleId == null) return false;
+        return memberRepository.findActiveProjectMemberships(userId).stream()
+                .anyMatch(pm -> adminRoleId.equals(pm.getRoleId()));
+    }
+
     private ProjectDto toDto(Project project) {
         int memberCount = memberRepository.findByProjectId(project.getId()).size();
         String ownerName = userRepository.findById(project.getOwnerId())
                 .map(u -> u.getFirstName() + " " + u.getLastName())
                 .orElse("Unknown");
+        String parentProjectName = null;
+        if (project.getParentProjectId() != null) {
+            parentProjectName = projectRepository.findById(project.getParentProjectId())
+                    .map(Project::getName).orElse(null);
+        }
+        int subProjectCount = projectRepository.countByParentProjectIdAndIsActiveTrue(project.getId());
 
         return ProjectDto.builder()
                 .id(project.getId())
@@ -352,6 +413,9 @@ public class ProjectService {
                 .description(project.getDescription())
                 .ownerId(project.getOwnerId())
                 .ownerName(ownerName)
+                .parentProjectId(project.getParentProjectId())
+                .parentProjectName(parentProjectName)
+                .subProjectCount(subProjectCount)
                 .metadataSchema(project.getMetadataSchema())
                 .aiEnabled(project.getAiEnabled())
                 .isActive(project.getIsActive())
