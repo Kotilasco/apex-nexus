@@ -195,27 +195,32 @@ export default function ProjectsPage() {
                       <p className="text-sm text-slate-400 py-2">No members assigned yet</p>
                     ) : (
                       <div className="space-y-2">
-                        {members.map(m => (
-                          <div key={m.userId} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-slate-200">
-                            <div className="flex items-center gap-3">
-                              <div className="h-8 w-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold">
-                                {(m.userId ?? '?').slice(0, 2).toUpperCase()}
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium text-slate-700">{m.userId}</p>
-                                <div className="flex gap-1 mt-0.5">
-                                  {(m.permissions ?? []).map(p => (
-                                    <span key={p} className="px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded font-medium">{p}</span>
-                                  ))}
+                        {members.map(m => {
+                          const displayName = m.fullName?.trim() || m.username || m.userId;
+                          const initials = (m.username || m.fullName || m.userId || '??').slice(0, 2).toUpperCase();
+                          return (
+                            <div key={m.userId} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-slate-200">
+                              <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold">
+                                  {initials}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-slate-700">{displayName}</p>
+                                  {m.email && <p className="text-xs text-slate-400">{m.email}</p>}
+                                  <div className="flex gap-1 mt-0.5">
+                                    {(m.effectivePermissions ?? m.permissions ?? []).map(p => (
+                                      <span key={p} className="px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded font-medium">{p}</span>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
+                              <button onClick={() => handleRemoveMember(m.userId)}
+                                className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600" title="Remove member">
+                                <UserMinus className="h-4 w-4" />
+                              </button>
                             </div>
-                            <button onClick={() => handleRemoveMember(m.userId)}
-                              className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600" title="Remove member">
-                              <UserMinus className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -232,7 +237,7 @@ export default function ProjectsPage() {
                       </div>
                       <div>
                         <span className="text-slate-400">Owner:</span>
-                        <p className="font-mono text-xs text-slate-600 mt-0.5">{project.ownerId}</p>
+                        <p className="text-sm text-slate-600 mt-0.5">{project.ownerName || project.ownerId}</p>
                       </div>
                       <div>
                         <span className="text-slate-400">AI Enabled:</span>

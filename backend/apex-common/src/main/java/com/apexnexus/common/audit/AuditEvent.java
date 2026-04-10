@@ -14,6 +14,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AuditEvent {
     private UUID userId;
+    private String username;
     @Builder.Default
     private String actorType = "HUMAN";    // HUMAN or AI_SERVICE
     private String action;

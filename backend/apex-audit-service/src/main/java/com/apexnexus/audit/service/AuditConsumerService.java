@@ -68,13 +68,15 @@ public class AuditConsumerService {
 
                 AuditLogEntry entry = AuditLogEntry.builder()
                         .userId(parseUuid((String) event.get("userId")))
+                        .username((String) event.get("username"))
                         .actorType(event.get("actorType") != null ? (String) event.get("actorType") : "HUMAN")
                         .action((String) event.get("action"))
                         .resourceType((String) event.get("resourceType"))
                         .resourceId(parseUuid((String) event.get("resourceId")))
+                        .resourceName((String) event.get("resourceName"))
                         .projectId(parseUuid((String) event.get("projectId")))
                         .details(event.get("details") != null ? castToStringMap(event.get("details")) : null)
-                        .ipAddress((String) event.get("ip"))
+                        .ipAddress((String) event.get("ipAddress"))
                         .userAgent((String) event.get("userAgent"))
                         .createdAt(LocalDateTime.now())
                         .build();

@@ -3,6 +3,8 @@ package com.apexnexus.auth.service;
 import com.apexnexus.auth.dto.*;
 import com.apexnexus.auth.model.Project;
 import com.apexnexus.auth.model.ProjectMember;
+import com.apexnexus.auth.model.ProjectPlugin;
+import com.apexnexus.auth.model.PluginRegistry;
 import com.apexnexus.auth.model.Role;
 import com.apexnexus.auth.model.User;
 import com.apexnexus.auth.repository.*;
@@ -26,6 +28,8 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final ProjectMemberRepository memberRepository;
+    private final ProjectPluginRepository projectPluginRepository;
+    private final PluginRegistryRepository pluginRegistryRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final AuditPublisher auditPublisher;
@@ -218,6 +222,106 @@ public class ProjectService {
         return result;
     }
 
+    // ====================== Project Plugin Management ======================
+
+    @Transactional(readOnly = true)
+    public List<ProjectPluginDto> getProjectPlugins(UUID projectId) {
+        if (!projectRepository.existsById(projectId)) {
+            throw new ResourceNotFoundException("Project", "id", projectId);
+        }
+        List<PluginRegistry> allPlugins = pluginRegistryRepository.findAllByOrderByDisplayNameAsc();
+        List<ProjectPlugin> projectPlugins = projectPluginRepository.findByProjectId(projectId);
+        Map<UUID, ProjectPlugin> activeMap = new HashMap<>();
+        for (ProjectPlugin pp : projectPlugins) {
+            activeMap.put(pp.getPluginId(), pp);
+        }
+        return allPlugins.stream().map(plugin -> {
+            ProjectPlugin pp = activeMap.get(plugin.getId());
+            return ProjectPluginDto.builder()
+                    .pluginId(plugin.getId())
+                    .name(plugin.getName())
+                    .displayName(plugin.getDisplayName())
+                    .description(plugin.getDescription())
+                    .version(plugin.getVersion())
+                    .vendor(plugin.getVendor())
+                    .pluginType(plugin.getPluginType())
+                    .category(plugin.getCategory())
+                    .globalStatus(plugin.getStatus())
+                    .activeInProject(pp != null && Boolean.TRUE.equals(pp.getIsActive()))
+                    .iconUrl(plugin.getIconUrl())
+                    .isPremium(plugin.getIsPremium())
+                    .activatedAt(pp != null ? pp.getActivatedAt() : null)
+                    .build();
+        }).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public ProjectPluginDto activateProjectPlugin(UUID projectId, UUID pluginId, UUID userId) {
+        if (!projectRepository.existsById(projectId)) {
+            throw new ResourceNotFoundException("Project", "id", projectId);
+        }
+        PluginRegistry plugin = pluginRegistryRepository.findById(pluginId)
+                .orElseThrow(() -> new ResourceNotFoundException("Plugin", "id", pluginId));
+
+        ProjectPlugin pp = projectPluginRepository.findByProjectIdAndPluginId(projectId, pluginId)
+                .orElse(null);
+        if (pp == null) {
+            pp = ProjectPlugin.builder()
+                    .projectId(projectId)
+                    .pluginId(pluginId)
+                    .isActive(true)
+                    .activatedBy(userId)
+                    .build();
+        } else {
+            pp.setIsActive(true);
+            pp.setActivatedBy(userId);
+            pp.setActivatedAt(java.time.Instant.now());
+        }
+        projectPluginRepository.save(pp);
+
+        auditPublisher.publish(AuditEvent.builder()
+                .userId(userId).action("PROJECT_PLUGIN_ACTIVATED").resourceType("PROJECT")
+                .resourceId(projectId).resourceName(plugin.getDisplayName())
+                .details(Map.of("pluginId", pluginId.toString())).build());
+
+        return ProjectPluginDto.builder()
+                .pluginId(plugin.getId()).name(plugin.getName()).displayName(plugin.getDisplayName())
+                .description(plugin.getDescription()).version(plugin.getVersion()).vendor(plugin.getVendor())
+                .pluginType(plugin.getPluginType()).category(plugin.getCategory())
+                .globalStatus(plugin.getStatus()).activeInProject(true)
+                .iconUrl(plugin.getIconUrl()).isPremium(plugin.getIsPremium())
+                .activatedAt(pp.getActivatedAt()).build();
+    }
+
+    @Transactional
+    public ProjectPluginDto deactivateProjectPlugin(UUID projectId, UUID pluginId, UUID userId) {
+        if (!projectRepository.existsById(projectId)) {
+            throw new ResourceNotFoundException("Project", "id", projectId);
+        }
+        PluginRegistry plugin = pluginRegistryRepository.findById(pluginId)
+                .orElseThrow(() -> new ResourceNotFoundException("Plugin", "id", pluginId));
+
+        ProjectPlugin pp = projectPluginRepository.findByProjectIdAndPluginId(projectId, pluginId)
+                .orElse(null);
+        if (pp != null) {
+            pp.setIsActive(false);
+            projectPluginRepository.save(pp);
+        }
+
+        auditPublisher.publish(AuditEvent.builder()
+                .userId(userId).action("PROJECT_PLUGIN_DEACTIVATED").resourceType("PROJECT")
+                .resourceId(projectId).resourceName(plugin.getDisplayName())
+                .details(Map.of("pluginId", pluginId.toString())).build());
+
+        return ProjectPluginDto.builder()
+                .pluginId(plugin.getId()).name(plugin.getName()).displayName(plugin.getDisplayName())
+                .description(plugin.getDescription()).version(plugin.getVersion()).vendor(plugin.getVendor())
+                .pluginType(plugin.getPluginType()).category(plugin.getCategory())
+                .globalStatus(plugin.getStatus()).activeInProject(false)
+                .iconUrl(plugin.getIconUrl()).isPremium(plugin.getIsPremium())
+                .activatedAt(pp != null ? pp.getActivatedAt() : null).build();
+    }
+
     // ====================== Helpers ======================
 
     private List<String> decodePermissions(long mask) {
@@ -265,10 +369,12 @@ public class ProjectService {
 
     private ProjectMemberDto toMemberDto(ProjectMember pm) {
         String username = "";
+        String email = "";
         String fullName = "";
         User user = userRepository.findById(pm.getUserId()).orElse(null);
         if (user != null) {
             username = user.getUsername();
+            email = user.getEmail();
             fullName = user.getFirstName() + " " + user.getLastName();
         }
 
@@ -284,6 +390,7 @@ public class ProjectService {
                 .projectName(projectName)
                 .userId(pm.getUserId())
                 .username(username)
+                .email(email)
                 .fullName(fullName)
                 .roleId(pm.getRoleId())
                 .roleName(roleName)

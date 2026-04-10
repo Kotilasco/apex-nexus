@@ -2,15 +2,15 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { projectApi, authApi, documentApi, workflowApi, jurisdictionApi } from '@/lib/api';
+import { projectApi, authApi, documentApi, workflowApi, jurisdictionApi, pluginApi } from '@/lib/api';
 import { useProjectStore } from '@/lib/project-store';
-import type { Project, ProjectMember, User, Document, Folder, WorkflowDefinition, Jurisdiction, JurisdictionRetentionRule } from '@/lib/types';
+import type { Project, ProjectMember, User, Document, Folder, WorkflowDefinition, Jurisdiction, JurisdictionRetentionRule, ProjectPluginStatus } from '@/lib/types';
 import { formatDateTime, formatBytes, getFileIcon } from '@/lib/utils';
 import {
   FolderKanban, Plus, Users, FileText, Settings, ArrowLeft, X,
   ChevronRight, Home, Upload, FolderPlus, Download, UserPlus, UserMinus,
   Eye, Trash2, GitBranch, Save, Loader2, CheckCircle2, Info, Shield,
-  Clock, Lock, AlertTriangle, BookOpen,
+  Clock, Lock, AlertTriangle, BookOpen, Plug, Power, PowerOff,
 } from 'lucide-react';
 import UploadModal from '@/components/documents/UploadModal';
 
@@ -39,7 +39,12 @@ export default function ProjectDetailPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [addMemberForm, setAddMemberForm] = useState({ userId: '', roleId: 'member', permissions: ['READ', 'WRITE'] });
   const [addMemberLoading, setAddMemberLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'documents' | 'members' | 'workflow' | 'retention' | 'settings'>('documents');
+  const [activeTab, setActiveTab] = useState<'documents' | 'members' | 'plugins' | 'workflow' | 'retention' | 'settings'>('documents');
+
+  // Plugin management
+  const [projectPlugins, setProjectPlugins] = useState<ProjectPluginStatus[]>([]);
+  const [pluginsLoading, setPluginsLoading] = useState(false);
+  const [togglingPlugin, setTogglingPlugin] = useState<string | null>(null);
 
   // Workflow settings
   const [workflowDefs, setWorkflowDefs] = useState<WorkflowDefinition[]>([]);
@@ -98,6 +103,15 @@ export default function ProjectDetailPage() {
 
   useEffect(() => { loadProject(); }, [loadProject]);
   useEffect(() => { loadDocuments(); }, [loadDocuments]);
+
+  // Load plugins when plugins tab is active
+  useEffect(() => {
+    if (activeTab !== 'plugins') return;
+    setPluginsLoading(true);
+    projectApi.getPlugins(projectId).then(res => {
+      setProjectPlugins(res.data?.data ?? res.data ?? []);
+    }).catch(() => {}).finally(() => setPluginsLoading(false));
+  }, [activeTab, projectId]);
 
   // Load workflow definitions when workflow tab is active
   useEffect(() => {
@@ -255,6 +269,20 @@ export default function ProjectDetailPage() {
     }
   };
 
+  const toggleProjectPlugin = async (plugin: ProjectPluginStatus) => {
+    setTogglingPlugin(plugin.pluginId);
+    try {
+      if (plugin.activeInProject) {
+        await projectApi.deactivatePlugin(projectId, plugin.pluginId);
+      } else {
+        await projectApi.activatePlugin(projectId, plugin.pluginId);
+      }
+      const res = await projectApi.getPlugins(projectId);
+      setProjectPlugins(res.data?.data ?? res.data ?? []);
+    } catch { alert('Failed to toggle plugin'); }
+    setTogglingPlugin(null);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -298,6 +326,7 @@ export default function ProjectDetailPage() {
         {[
           { key: 'documents' as const, label: 'Documents', icon: FileText },
           { key: 'members' as const, label: `Members (${members.length})`, icon: Users },
+          { key: 'plugins' as const, label: 'Plugins', icon: Plug },
           { key: 'workflow' as const, label: 'Workflow', icon: GitBranch },
           { key: 'retention' as const, label: 'Retention & Compliance', icon: Shield },
           { key: 'settings' as const, label: 'Settings', icon: Settings },
@@ -456,24 +485,100 @@ export default function ProjectDetailPage() {
             <p className="text-sm text-slate-400 py-4 text-center">No members assigned yet</p>
           ) : (
             <div className="space-y-2">
-              {members.map(m => (
-                <div key={m.userId} className="flex items-center justify-between bg-slate-50 rounded-lg px-4 py-3 border border-slate-200">
-                  <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-bold">
-                      {(m.userId ?? '?').slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-700">{m.userId}</p>
-                      <div className="flex gap-1 mt-0.5 flex-wrap">
-                        {(m.permissions ?? []).map(p => (
-                          <span key={p} className="px-1.5 py-0.5 bg-white text-slate-500 text-[10px] rounded font-medium border border-slate-200">{p}</span>
-                        ))}
+              {members.map(m => {
+                const displayName = m.fullName?.trim() || m.username || m.userId;
+                const initials = (m.username || m.fullName || m.userId || '??').slice(0, 2).toUpperCase();
+                return (
+                  <div key={m.userId} className="flex items-center justify-between bg-slate-50 rounded-lg px-4 py-3 border border-slate-200">
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-bold">
+                        {initials}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">{displayName}</p>
+                        {m.email && <p className="text-xs text-slate-400">{m.email}</p>}
+                        {m.roleName && <span className="text-[10px] text-primary-600 font-medium">{m.roleName}</span>}
+                        <div className="flex gap-1 mt-0.5 flex-wrap">
+                          {(m.effectivePermissions ?? m.permissions ?? []).map(p => (
+                            <span key={p} className="px-1.5 py-0.5 bg-white text-slate-500 text-[10px] rounded font-medium border border-slate-200">{p}</span>
+                          ))}
+                        </div>
                       </div>
                     </div>
+                    <button onClick={() => handleRemoveMember(m.userId)}
+                      className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600" title="Remove member">
+                      <UserMinus className="h-4 w-4" />
+                    </button>
                   </div>
-                  <button onClick={() => handleRemoveMember(m.userId)}
-                    className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600" title="Remove member">
-                    <UserMinus className="h-4 w-4" />
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Plugins Tab */}
+      {activeTab === 'plugins' && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700">Project Plugins</h3>
+              <p className="text-xs text-slate-400 mt-1">Activate or deactivate plugins for this project. Only globally active plugins are shown.</p>
+            </div>
+            <span className="px-2.5 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-full border border-green-200">
+              {projectPlugins.filter(p => p.activeInProject).length} active
+            </span>
+          </div>
+
+          {pluginsLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary-600" />
+            </div>
+          ) : projectPlugins.length === 0 ? (
+            <div className="text-center py-8">
+              <Plug className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+              <p className="text-sm text-slate-400">No plugins available. Activate plugins from the Marketplace first.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {projectPlugins.map(plugin => (
+                <div key={plugin.pluginId}
+                  className={`flex items-center justify-between rounded-lg px-4 py-3 border transition ${
+                    plugin.activeInProject ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center text-lg ${
+                      plugin.activeInProject ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-500'
+                    }`}>
+                      <Plug className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-slate-800 truncate">{plugin.displayName}</p>
+                        <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded font-medium">{plugin.pluginType}</span>
+                        {plugin.isPremium && (
+                          <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] rounded font-medium">Premium</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-400 truncate">{plugin.description}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">{plugin.vendor} &middot; v{plugin.version}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => toggleProjectPlugin(plugin)}
+                    disabled={togglingPlugin === plugin.pluginId}
+                    className={`ml-3 px-3 py-1.5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition ${
+                      plugin.activeInProject
+                        ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50'
+                        : 'bg-primary-600 text-white hover:bg-primary-700'
+                    } disabled:opacity-50`}>
+                    {togglingPlugin === plugin.pluginId ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : plugin.activeInProject ? (
+                      <><PowerOff className="h-3.5 w-3.5" /> Deactivate</>
+                    ) : (
+                      <><Power className="h-3.5 w-3.5" /> Activate</>
+                    )}
                   </button>
                 </div>
               ))}
@@ -796,7 +901,7 @@ export default function ProjectDetailPage() {
             </div>
             <div>
               <span className="text-slate-400">Owner</span>
-              <p className="font-mono text-xs text-slate-600 mt-1">{project.ownerId}</p>
+              <p className="text-sm text-slate-600 mt-1">{project.ownerName || project.ownerId}</p>
             </div>
             <div>
               <span className="text-slate-400">AI Enabled</span>

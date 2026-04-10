@@ -12,10 +12,12 @@ import java.util.UUID;
 public class AuditLogDto {
     private UUID id;
     private UUID userId;
+    private String username;
     private String actorType;  // HUMAN or AI_SERVICE
     private String action;
     private String resourceType;
     private UUID resourceId;
+    private String resourceName;
     private UUID projectId;
     private Map<String, Object> details;
     private String ipAddress;

@@ -269,6 +269,8 @@ export const auditApi = {
     api.get(`/audit/logs/by-resource-type/${type}`, { params: { page, size } }),
   getByDate: (from: string, to: string, page = 0, size = 20) =>
     api.get('/audit/logs/by-date', { params: { from, to, page, size } }),
+  getRecent: (page = 0, size = 20) =>
+    api.get('/audit/recent', { params: { page, size } }),
   getStats: () => api.get('/audit/stats'),
 };
 
@@ -302,6 +304,11 @@ export const projectApi = {
     api.post(`/projects/${id}/members`, data),
   removeMember: (id: string, userId: string) =>
     api.delete(`/projects/${id}/members/${userId}`),
+  getPlugins: (id: string) => api.get(`/projects/${id}/plugins`),
+  activatePlugin: (id: string, pluginId: string) =>
+    api.post(`/projects/${id}/plugins/${pluginId}/activate`),
+  deactivatePlugin: (id: string, pluginId: string) =>
+    api.post(`/projects/${id}/plugins/${pluginId}/deactivate`),
 };
 
 /* ── AI Governance ── */

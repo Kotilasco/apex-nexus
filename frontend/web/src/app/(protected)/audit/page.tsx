@@ -6,7 +6,8 @@ import type { AuditEntry } from '@/lib/types';
 import { formatDateTime } from '@/lib/utils';
 import {
   ClipboardList, Search, RefreshCw, Filter, User,
-  FileText, Globe, ChevronDown, BarChart3,
+  FileText, Globe, ChevronDown, ChevronRight, BarChart3,
+  X, Monitor, Clock, Shield, Hash, Tag, Info,
 } from 'lucide-react';
 
 type View = 'logs' | 'stats';
@@ -23,6 +24,11 @@ const actionColors: Record<string, string> = {
   APPROVE: 'bg-emerald-100 text-emerald-700',
   REJECT: 'bg-rose-100 text-rose-700',
   DOWNLOAD: 'bg-cyan-100 text-cyan-700',
+  SIGN: 'bg-violet-100 text-violet-700',
+  WORKFLOW_STARTED: 'bg-orange-100 text-orange-700',
+  WORKFLOW_TRANSITION: 'bg-amber-100 text-amber-700',
+  COPY_VERSION_TO_PROJECT: 'bg-sky-100 text-sky-700',
+  ASSIGN_TO_PROJECT: 'bg-lime-100 text-lime-700',
 };
 
 export default function AuditPage() {
@@ -32,6 +38,7 @@ export default function AuditPage() {
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [stats, setStats] = useState<Record<string, unknown> | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<AuditEntry | null>(null);
 
   /* Filters */
   const [filterType, setFilterType] = useState<'date' | 'action' | 'resourceType'>('date');
@@ -51,10 +58,8 @@ export default function AuditPage() {
       } else if (filterType === 'date' && dateFrom && dateTo) {
         res = await auditApi.getByDate(dateFrom, dateTo, page, 20);
       } else {
-        // Default: recent date range (last 30 days)
-        const to = new Date().toISOString();
-        const from = new Date(Date.now() - 30 * 86400000).toISOString();
-        res = await auditApi.getByDate(from, to, page, 20);
+        // Default: most recent entries
+        res = await auditApi.getRecent(page, 20);
       }
       const data = res.data?.data ?? res.data;
       setEntries(data?.content ?? (Array.isArray(data) ? data : []));
@@ -199,6 +204,7 @@ export default function AuditPage() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b">
                   <tr>
+                    <th className="text-left px-4 py-3 font-medium text-slate-600 w-8"></th>
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Timestamp</th>
                     <th className="text-left px-4 py-3 font-medium text-slate-600">User</th>
                     <th className="text-left px-4 py-3 font-medium text-slate-600">Action</th>
@@ -208,12 +214,21 @@ export default function AuditPage() {
                 </thead>
                 <tbody className="divide-y">
                   {entries.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-slate-50">
+                    <tr
+                      key={entry.id}
+                      onClick={() => setSelectedEntry(selectedEntry?.id === entry.id ? null : entry)}
+                      className={`hover:bg-slate-50 cursor-pointer transition-colors ${selectedEntry?.id === entry.id ? 'bg-primary-50' : ''}`}
+                    >
+                      <td className="px-4 py-3 text-slate-400">
+                        {selectedEntry?.id === entry.id
+                          ? <ChevronDown className="h-4 w-4" />
+                          : <ChevronRight className="h-4 w-4" />}
+                      </td>
                       <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{formatDateTime(entry.timestamp || entry.createdAt || '')}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-slate-400" />
-                          <span className="text-slate-700">{entry.username || entry.userId?.slice(0, 8) || 'System'}</span>
+                          <span className="text-slate-700 font-medium">{entry.username || entry.userId?.slice(0, 8) || 'System'}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -225,18 +240,128 @@ export default function AuditPage() {
                         <div className="flex items-center gap-2">
                           <FileText className="h-4 w-4 text-slate-400" />
                           <span className="text-slate-600">{entry.resourceType}</span>
-                          <span className="text-xs text-slate-400 font-mono">{entry.resourceId?.slice(0, 8)}...</span>
+                          {entry.resourceName ? (
+                            <span className="text-xs text-slate-500 truncate max-w-[180px]" title={entry.resourceName}>{entry.resourceName}</span>
+                          ) : (
+                            <span className="text-xs text-slate-400 font-mono">{entry.resourceId?.slice(0, 8)}...</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-slate-500 font-mono text-xs">
                         <div className="flex items-center gap-1">
-                          <Globe className="h-3 w-3" /> {entry.ipAddress}
+                          <Globe className="h-3 w-3" /> {entry.ipAddress || '—'}
                         </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Detail Panel */}
+          {selectedEntry && (
+            <div className="bg-white rounded-xl border overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 bg-slate-50 border-b">
+                <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                  <Info className="h-4 w-4" /> Audit Entry Details
+                </h3>
+                <button onClick={() => setSelectedEntry(null)} className="text-slate-400 hover:text-slate-600">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2">
+                    <Hash className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase tracking-wider">Entry ID</p>
+                      <p className="text-slate-700 font-mono text-xs break-all">{selectedEntry.id}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Clock className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase tracking-wider">Timestamp</p>
+                      <p className="text-slate-700">{formatDateTime(selectedEntry.timestamp || selectedEntry.createdAt || '')}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <User className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase tracking-wider">User</p>
+                      <p className="text-slate-700 font-medium">{selectedEntry.username || 'Unknown'}</p>
+                      <p className="text-xs text-slate-400 font-mono">{selectedEntry.userId || '—'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Shield className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase tracking-wider">Actor Type</p>
+                      <p className="text-slate-700">{selectedEntry.actorType || 'HUMAN'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Tag className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase tracking-wider">Action</p>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${actionColors[selectedEntry.action] || 'bg-slate-100 text-slate-600'}`}>
+                        {selectedEntry.action}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2">
+                    <FileText className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase tracking-wider">Resource</p>
+                      <p className="text-slate-700">{selectedEntry.resourceType}</p>
+                      {selectedEntry.resourceName && (
+                        <p className="text-slate-600 text-xs">{selectedEntry.resourceName}</p>
+                      )}
+                      <p className="text-xs text-slate-400 font-mono break-all">{selectedEntry.resourceId || '—'}</p>
+                    </div>
+                  </div>
+                  {selectedEntry.projectId && (
+                    <div className="flex items-start gap-2">
+                      <Hash className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs text-slate-400 uppercase tracking-wider">Project ID</p>
+                        <p className="text-xs text-slate-700 font-mono break-all">{selectedEntry.projectId}</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-start gap-2">
+                    <Globe className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase tracking-wider">IP Address</p>
+                      <p className="text-slate-700 font-mono text-xs">{selectedEntry.ipAddress || '—'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Monitor className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase tracking-wider">User Agent</p>
+                      <p className="text-xs text-slate-500 break-all">{selectedEntry.userAgent || '—'}</p>
+                    </div>
+                  </div>
+                </div>
+                {/* Details JSON */}
+                {selectedEntry.details && Object.keys(selectedEntry.details).length > 0 && (
+                  <div className="md:col-span-2">
+                    <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Additional Details</p>
+                    <div className="bg-slate-50 rounded-lg p-3 space-y-1">
+                      {Object.entries(selectedEntry.details).map(([key, value]) => (
+                        <div key={key} className="flex items-start gap-3 text-xs">
+                          <span className="text-slate-500 font-medium min-w-[100px] shrink-0">{key}</span>
+                          <span className="text-slate-700 font-mono break-all">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

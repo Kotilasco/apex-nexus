@@ -168,6 +168,7 @@ export interface Project {
   name: string;
   description: string;
   ownerId: string;
+  ownerName?: string;
   aiEnabled: boolean;
   isActive: boolean;
   defaultWorkflowDefinitionId?: string;
@@ -176,14 +177,39 @@ export interface Project {
   jurisdictionCode?: string;
   privacyRedactionEnabled?: boolean;
   complianceCategory?: string;
+  memberCount?: number;
   createdAt: string;
 }
 
 export interface ProjectMember {
+  id?: string;
   projectId: string;
   userId: string;
+  username?: string;
+  email?: string;
+  fullName?: string;
   roleId: string;
+  roleName?: string;
+  permissionsMask?: number;
+  effectivePermissions?: string[];
   permissions: string[];
+  joinedAt?: string;
+}
+
+export interface ProjectPluginStatus {
+  pluginId: string;
+  name: string;
+  displayName: string;
+  description: string;
+  version: string;
+  vendor: string;
+  pluginType: string;
+  category: string;
+  globalStatus: string;
+  activeInProject: boolean;
+  iconUrl?: string;
+  isPremium?: boolean;
+  activatedAt?: string;
 }
 
 /* ── AI Governance ── */
@@ -289,6 +315,7 @@ export interface AuditEntry {
   action: string;
   resourceType: string;
   resourceId: string;
+  resourceName?: string;
   projectId?: string;
   details: Record<string, unknown>;
   ipAddress: string;

@@ -92,6 +92,7 @@ public class AuthService {
 
         auditPublisher.publish(AuditEvent.builder()
                 .userId(user.getId())
+                .username(user.getUsername())
                 .action("LOGIN")
                 .resourceType("AUTH")
                 .resourceName(user.getUsername())
@@ -137,6 +138,7 @@ public class AuthService {
 
         auditPublisher.publish(AuditEvent.builder()
                 .userId(user.getId())
+                .username(user.getUsername())
                 .action("REGISTER")
                 .resourceType("USER")
                 .resourceId(user.getId())

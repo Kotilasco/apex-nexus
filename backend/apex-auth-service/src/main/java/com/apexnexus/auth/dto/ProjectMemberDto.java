@@ -19,6 +19,7 @@ public class ProjectMemberDto {
     private String projectName;
     private UUID userId;
     private String username;
+    private String email;
     private String fullName;
     private UUID roleId;
     private String roleName;

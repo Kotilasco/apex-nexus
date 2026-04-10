@@ -81,4 +81,31 @@ public class ProjectController {
     public ResponseEntity<ApiResponse<List<ProjectMemberDto>>> getMembers(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(projectService.getProjectMembers(id)));
     }
+
+    // ====================== Project Plugins ======================
+
+    @GetMapping("/{id}/plugins")
+    public ResponseEntity<ApiResponse<List<ProjectPluginDto>>> getProjectPlugins(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(projectService.getProjectPlugins(id)));
+    }
+
+    @PostMapping("/{id}/plugins/{pluginId}/activate")
+    public ResponseEntity<ApiResponse<ProjectPluginDto>> activateProjectPlugin(
+            @PathVariable UUID id,
+            @PathVariable UUID pluginId,
+            Authentication authentication) {
+        UUID userId = (UUID) authentication.getPrincipal();
+        return ResponseEntity.ok(ApiResponse.ok("Plugin activated for project",
+                projectService.activateProjectPlugin(id, pluginId, userId)));
+    }
+
+    @PostMapping("/{id}/plugins/{pluginId}/deactivate")
+    public ResponseEntity<ApiResponse<ProjectPluginDto>> deactivateProjectPlugin(
+            @PathVariable UUID id,
+            @PathVariable UUID pluginId,
+            Authentication authentication) {
+        UUID userId = (UUID) authentication.getPrincipal();
+        return ResponseEntity.ok(ApiResponse.ok("Plugin deactivated for project",
+                projectService.deactivateProjectPlugin(id, pluginId, userId)));
+    }
 }

@@ -21,6 +21,12 @@ public class AuditLogEntry {
     @Column(name = "user_id")
     private UUID userId;
 
+    @Column(name = "username")
+    private String username;
+
+    @Column(name = "resource_name")
+    private String resourceName;
+
     @Column(name = "actor_type", length = 10)
     @Builder.Default
     private String actorType = "HUMAN";
