@@ -267,7 +267,8 @@ export default function VersionsPanel({ document: doc, onClose }: Props) {
                         setCopyTargetProject('');
                         try {
                           const res = await projectApi.getMine();
-                          setCopyProjects(res.data?.data ?? res.data ?? []);
+                          const all = res.data?.data ?? res.data ?? [];
+                          setCopyProjects(all.filter((p: { id: string }) => p.id !== doc.projectId));
                         } catch { setCopyProjects([]); }
                       }}
                       className="p-1.5 rounded-lg hover:bg-slate-200"

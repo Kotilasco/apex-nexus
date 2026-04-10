@@ -116,6 +116,7 @@ export interface Folder {
   id: string;
   name: string;
   parentId: string | null;
+  projectId?: string;
   path: string;
   createdAt: string;
 }

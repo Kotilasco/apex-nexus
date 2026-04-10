@@ -27,6 +27,7 @@ export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [currentFolder, setCurrentFolder] = useState<string | undefined>();
+  const [currentFolderProjectId, setCurrentFolderProjectId] = useState<string | undefined>();
   const [breadcrumbs, setBreadcrumbs] = useState<{ id?: string; name: string }[]>([{ name: 'Root' }]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -412,6 +413,7 @@ export default function DocumentsPage() {
   // Reset folder navigation when project changes
   useEffect(() => {
     setCurrentFolder(undefined);
+    setCurrentFolderProjectId(undefined);
     setBreadcrumbs([{ name: 'Root' }]);
     setPage(0);
     setSelectedDoc(null);
@@ -427,19 +429,22 @@ export default function DocumentsPage() {
     }).catch(() => {});
   }, [searchParams]);
 
-  const navigateToFolder = (folderId?: string, folderName?: string) => {
+  const navigateToFolder = (folderId?: string, folderName?: string, folderProjectId?: string) => {
     if (folderId) {
       setBreadcrumbs(prev => [...prev, { id: folderId, name: folderName || 'Folder' }]);
     } else {
       setBreadcrumbs([{ name: 'Root' }]);
     }
     setCurrentFolder(folderId);
+    setCurrentFolderProjectId(folderProjectId);
     setPage(0);
   };
 
   const navigateBreadcrumb = (index: number) => {
     setBreadcrumbs(prev => prev.slice(0, index + 1));
-    setCurrentFolder(breadcrumbs[index]?.id);
+    const folderId = breadcrumbs[index]?.id;
+    setCurrentFolder(folderId);
+    if (!folderId) setCurrentFolderProjectId(undefined);
     setPage(0);
   };
 
@@ -483,7 +488,7 @@ export default function DocumentsPage() {
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
     try {
-      await documentApi.createFolder({ name: newFolderName.trim(), parentId: currentFolder, projectId: activeProject?.id });
+      await documentApi.createFolder({ name: newFolderName.trim(), parentId: currentFolder, projectId: currentFolderProjectId || activeProject?.id });
       setShowNewFolder(false);
       setNewFolderName('');
       loadData();
@@ -587,7 +592,7 @@ export default function DocumentsPage() {
                 <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">Folders</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                   {folders.map(folder => (
-                    <button key={folder.id} onClick={() => navigateToFolder(folder.id, folder.name)}
+                    <button key={folder.id} onClick={() => navigateToFolder(folder.id, folder.name, folder.projectId)}
                       className="flex flex-col items-center p-3 rounded-lg border border-slate-200 hover:border-primary-300 hover:bg-primary-50 transition text-center">
                       <FolderPlus className="h-8 w-8 text-amber-500 mb-1" />
                       <span className="text-xs font-medium text-slate-700 truncate w-full">{folder.name}</span>
@@ -766,7 +771,7 @@ export default function DocumentsPage() {
       </div>
 
       {/* Modals / Panels */}
-      {showUpload && <UploadModal folderId={currentFolder} projectId={activeProject?.id} onClose={() => setShowUpload(false)} onComplete={() => { setShowUpload(false); loadData(); }} />}
+      {showUpload && <UploadModal folderId={currentFolder} projectId={currentFolderProjectId || activeProject?.id} onClose={() => setShowUpload(false)} onComplete={() => { setShowUpload(false); loadData(); }} />}
       {showNotes && selectedDoc && <NotesPanel document={selectedDoc} onClose={() => { setShowNotes(false); setSelectedDoc(null); }} />}
       {showVersions && selectedDoc && <VersionsPanel document={selectedDoc} onClose={() => { setShowVersions(false); setSelectedDoc(null); }} />}
 

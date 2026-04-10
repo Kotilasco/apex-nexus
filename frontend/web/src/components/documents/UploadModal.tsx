@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { documentApi } from '@/lib/api';
+import { useState, useCallback, useEffect } from 'react';
+import { documentApi, projectApi } from '@/lib/api';
 import { useDropzone } from 'react-dropzone';
 import { Upload, X, File } from 'lucide-react';
 import { formatBytes } from '@/lib/utils';
@@ -19,6 +19,16 @@ export default function UploadModal({ folderId, projectId, onClose, onComplete }
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
+  const [selectedProject, setSelectedProject] = useState(projectId ?? '');
+  const [projectList, setProjectList] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    if (!projectId) {
+      projectApi.getMine()
+        .then(res => setProjectList(res.data?.data ?? res.data ?? []))
+        .catch(() => {});
+    }
+  }, [projectId]);
 
   const onDrop = useCallback((accepted: File[]) => {
     setFiles(accepted);
@@ -42,7 +52,8 @@ export default function UploadModal({ folderId, projectId, onClose, onComplete }
       const metadata: Record<string, unknown> = { title: title || files[0].name };
       if (description) metadata.description = description;
       if (folderId) metadata.folderId = folderId;
-      if (projectId) metadata.projectId = projectId;
+      const pid = projectId || selectedProject;
+      if (pid) metadata.projectId = pid;
       if (tags) metadata.tags = tags.split(',').map(t => t.trim()).filter(Boolean);
       formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
       await documentApi.upload(formData);
@@ -98,6 +109,16 @@ export default function UploadModal({ folderId, projectId, onClose, onComplete }
             <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none" />
           </div>
+          {!projectId && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Project</label>
+              <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                <option value="">No project</option>
+                {projectList.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Tags (comma separated)</label>
             <input value={tags} onChange={e => setTags(e.target.value)} placeholder="invoice, finance, 2024"
