@@ -81,7 +81,7 @@ export default function IndustryPage() {
                       {INDUSTRY_ICONS[key] || <Factory className="h-6 w-6 text-slate-400" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-lg font-bold text-slate-900">{t.displayName}</h3>
+                      <h3 className="text-lg font-bold text-slate-900">{t.displayName || t.name}</h3>
                       <p className="text-sm text-slate-600 mt-1">{t.description}</p>
                     </div>
                   </div>

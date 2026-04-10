@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { documentApi, lockApi, wopiApi, workflowApi, projectApi, signatureApi } from '@/lib/api';
+import { documentApi, lockApi, wopiApi, workflowApi, projectApi, signatureApi, authApi } from '@/lib/api';
 import type { WorkflowDefinition, WorkflowInstance } from '@/lib/types';
 import { useProjectStore } from '@/lib/project-store';
 import type { Document, Folder, VersionPreCheckResult } from '@/lib/types';
@@ -10,7 +10,7 @@ import { formatBytes, formatDate, getFileIcon } from '@/lib/utils';
 import {
   Upload, FolderPlus, ChevronRight, Home, Download, Lock,
   Unlock, Trash2, FileText, StickyNote, MoreVertical, Eye, Bot, Shield, ExternalLink,
-  Edit3, Heart, UploadCloud, AlertTriangle, GitBranch, Send, Loader2, Save, X, PenTool,
+  Edit3, Heart, UploadCloud, AlertTriangle, GitBranch, Send, Loader2, Save, X, PenTool, Search,
 } from 'lucide-react';
 import UploadModal from '@/components/documents/UploadModal';
 import NotesPanel from '@/components/documents/NotesPanel';
@@ -68,6 +68,10 @@ export default function DocumentsPage() {
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [signatureSignerId, setSignatureSignerId] = useState('');
   const [signatureProvider, setSignatureProvider] = useState<'INTERNAL' | 'DOCUSIGN'>('INTERNAL');
+  const [signerUsers, setSignerUsers] = useState<{ id: string; username: string; email: string; firstName: string; lastName: string }[]>([]);
+  const [signerSearch, setSignerSearch] = useState('');
+  const [signerDropdownOpen, setSignerDropdownOpen] = useState(false);
+  const signerRef = useRef<HTMLDivElement>(null);
 
   // Workflow state
   const [showWorkflow, setShowWorkflow] = useState(false);
@@ -301,7 +305,14 @@ export default function DocumentsPage() {
   const handleRequestSignature = async (doc: Document, provider: 'INTERNAL' | 'DOCUSIGN') => {
     setSignatureProvider(provider);
     setSignatureSignerId('');
+    setSignerSearch('');
+    setSignerDropdownOpen(false);
+    setSignatureError(null);
     setShowSignatureModal(true);
+    try {
+      const res = await authApi.getUsers(0, 100);
+      setSignerUsers(res.data?.data || []);
+    } catch { setSignerUsers([]); }
   };
 
   const [signatureError, setSignatureError] = useState<string | null>(null);
@@ -750,19 +761,70 @@ export default function DocumentsPage() {
       )}
 
       {/* Signature Request Modal */}
-      {showSignatureModal && selectedDoc && (
+      {showSignatureModal && selectedDoc && (() => {
+        const selectedUser = signerUsers.find(u => u.id === signatureSignerId);
+        const filteredUsers = signerUsers.filter(u => {
+          if (!signerSearch) return true;
+          const q = signerSearch.toLowerCase();
+          return u.username.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+            || `${u.firstName} ${u.lastName}`.toLowerCase().includes(q);
+        });
+        return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl p-6 w-[420px]">
             <h3 className="text-lg font-semibold mb-4">Request Signature</h3>
             <p className="text-sm text-gray-600 mb-2">Document: {selectedDoc.title}</p>
             {signatureError && <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">{signatureError}</div>}
-            <label className="block text-sm font-medium text-gray-700 mb-1">Signer User ID (UUID)</label>
-            <input
-              value={signatureSignerId}
-              onChange={e => setSignatureSignerId(e.target.value)}
-              placeholder="e.g. b0000000-0000-0000-0000-000000000001"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-violet-400"
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Select Signer</label>
+            <div ref={signerRef} className="relative mb-3">
+              {/* Selected user or search input */}
+              {selectedUser && !signerDropdownOpen ? (
+                <button
+                  onClick={() => setSignerDropdownOpen(true)}
+                  className="w-full flex items-center justify-between border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                >
+                  <span>
+                    <span className="font-medium">{selectedUser.firstName} {selectedUser.lastName}</span>
+                    <span className="text-gray-400 ml-1">({selectedUser.username})</span>
+                  </span>
+                  <X className="h-4 w-4 text-gray-400" onClick={e => { e.stopPropagation(); setSignatureSignerId(''); setSignerSearch(''); }} />
+                </button>
+              ) : (
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    value={signerSearch}
+                    onChange={e => { setSignerSearch(e.target.value); setSignerDropdownOpen(true); }}
+                    onFocus={() => setSignerDropdownOpen(true)}
+                    placeholder="Search by name, username, or email..."
+                    className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    autoFocus
+                  />
+                </div>
+              )}
+              {/* Dropdown */}
+              {signerDropdownOpen && (
+                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {filteredUsers.length === 0 ? (
+                    <div className="px-3 py-2 text-sm text-gray-400">No users found</div>
+                  ) : filteredUsers.map(u => (
+                    <button
+                      key={u.id}
+                      onClick={() => { setSignatureSignerId(u.id); setSignerSearch(''); setSignerDropdownOpen(false); }}
+                      className="w-full flex items-start gap-2 px-3 py-2 hover:bg-violet-50 text-left text-sm transition"
+                    >
+                      <div className="flex-shrink-0 mt-0.5 h-7 w-7 rounded-full bg-violet-100 flex items-center justify-center text-xs font-bold text-violet-700">
+                        {u.firstName?.[0]}{u.lastName?.[0]}
+                      </div>
+                      <div>
+                        <div className="font-medium text-slate-800">{u.firstName} {u.lastName}</div>
+                        <div className="text-xs text-gray-400">{u.username} &middot; {u.email}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Provider</label>
             <select
               value={signatureProvider}
@@ -776,13 +838,14 @@ export default function DocumentsPage() {
               <button onClick={() => setShowSignatureModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
               <button
                 onClick={handleSubmitSignatureRequest}
-                disabled={!signatureSignerId.trim()}
+                disabled={!signatureSignerId}
                 className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700 disabled:opacity-50"
               >Send Request</button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Document Retention Panel */}
       {showRetention && selectedDoc && (
