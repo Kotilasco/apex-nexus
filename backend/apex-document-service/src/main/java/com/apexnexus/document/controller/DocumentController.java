@@ -178,6 +178,18 @@ public class DocumentController {
         return ResponseEntity.ok(ApiResponse.ok(documentService.compareVersionTexts(id, v1, v2)));
     }
 
+    @PostMapping("/{id}/versions/{versionNumber}/copy-to-project")
+    public ResponseEntity<ApiResponse<DocumentDto>> copyVersionToProject(
+            @PathVariable UUID id,
+            @PathVariable int versionNumber,
+            @Valid @RequestBody CopyVersionToProjectRequest request,
+            Authentication auth) throws Exception {
+        UUID userId = (UUID) auth.getPrincipal();
+        DocumentDto doc = documentService.copyVersionToProject(id, versionNumber, request, userId);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok("Version copied to project", doc));
+    }
+
     // --- Notes ---
 
     @PostMapping("/{id}/notes")

@@ -10,7 +10,7 @@ import { formatBytes, formatDate, getFileIcon } from '@/lib/utils';
 import {
   Upload, FolderPlus, ChevronRight, Home, Download, Lock,
   Unlock, Trash2, FileText, StickyNote, MoreVertical, Eye, Bot, Shield, ExternalLink,
-  Edit3, Heart, UploadCloud, AlertTriangle, GitBranch, Send, Loader2, Save, X, PenTool, Search,
+  Edit3, Heart, UploadCloud, AlertTriangle, GitBranch, Send, Loader2, Save, X, PenTool, Search, FolderInput,
 } from 'lucide-react';
 import UploadModal from '@/components/documents/UploadModal';
 import NotesPanel from '@/components/documents/NotesPanel';
@@ -57,6 +57,12 @@ export default function DocumentsPage() {
 
   // Context menu positioning
   const [contextMenuPos, setContextMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  // Assign to Project modal state
+  const [showAssignProject, setShowAssignProject] = useState(false);
+  const [assignProjectList, setAssignProjectList] = useState<{ id: string; name: string }[]>([]);
+  const [assignProjectId, setAssignProjectId] = useState('');
+  const [assigningProject, setAssigningProject] = useState(false);
 
   // Text editing state
   const [textContent, setTextContent] = useState<string | null>(null);
@@ -724,6 +730,19 @@ export default function DocumentsPage() {
                     className="flex items-center w-full px-3 py-2 text-sm hover:bg-slate-50">
                     <Shield className="h-4 w-4 mr-2" /> Retention
                   </button>
+                  {!doc.projectId && (
+                    <button onClick={async () => {
+                      setSelectedDoc(doc); setContextMenu(null); setContextMenuPos(null);
+                      try {
+                        const res = await projectApi.getMine();
+                        setAssignProjectList(res.data?.data ?? res.data ?? []);
+                      } catch { setAssignProjectList([]); }
+                      setAssignProjectId('');
+                      setShowAssignProject(true);
+                    }} className="flex items-center w-full px-3 py-2 text-sm hover:bg-slate-50">
+                      <FolderInput className="h-4 w-4 mr-2" /> Assign to Project
+                    </button>
+                  )}
                   <button onClick={() => { handleDelete(doc); setContextMenu(null); setContextMenuPos(null); }}
                     className="flex items-center w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50">
                     <Trash2 className="h-4 w-4 mr-2" /> Delete
@@ -948,6 +967,48 @@ export default function DocumentsPage() {
           <div className="bg-white rounded-xl shadow-xl p-6 flex items-center gap-4">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600" />
             <span className="text-sm text-slate-700">Analyzing document for anomalies...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Assign to Project Modal */}
+      {showAssignProject && selectedDoc && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-[420px]">
+            <h3 className="text-lg font-semibold mb-4">Assign to Project</h3>
+            <p className="text-sm text-gray-600 mb-4">Document: <span className="font-medium">{selectedDoc.title}</span></p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Select Project</label>
+            <select
+              value={assignProjectId}
+              onChange={e => setAssignProjectId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-primary-400"
+            >
+              <option value="">— Choose a project —</option>
+              {assignProjectList.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => { setShowAssignProject(false); setSelectedDoc(null); }}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+              <button
+                disabled={!assignProjectId || assigningProject}
+                onClick={async () => {
+                  setAssigningProject(true);
+                  try {
+                    await documentApi.update(selectedDoc.id, { projectId: assignProjectId });
+                    setShowAssignProject(false);
+                    setSelectedDoc(null);
+                    loadData();
+                  } catch { alert('Failed to assign project'); }
+                  finally { setAssigningProject(false); }
+                }}
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {assigningProject && <Loader2 className="h-4 w-4 animate-spin" />}
+                Assign
+              </button>
+            </div>
           </div>
         </div>
       )}

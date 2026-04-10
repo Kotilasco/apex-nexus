@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { documentApi } from '@/lib/api';
+import { documentApi, projectApi } from '@/lib/api';
 import type { Document, DocumentVersion } from '@/lib/types';
 import { formatBytes, formatDateTime } from '@/lib/utils';
-import { X, Download, History, Eye, AlertTriangle, GitCompare } from 'lucide-react';
+import { X, Download, History, Eye, AlertTriangle, GitCompare, Copy, Loader2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
 const DocxViewer = dynamic(() => import('@/components/documents/DocxViewer'), { ssr: false });
@@ -27,6 +27,12 @@ export default function VersionsPanel({ document: doc, onClose }: Props) {
   const [compareSelection, setCompareSelection] = useState<[number | null, number | null]>([null, null]);
   const [compareResult, setCompareResult] = useState<{ text1: string; text2: string; version1: string; version2: string } | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
+
+  // Copy to Project state
+  const [copyVersion, setCopyVersion] = useState<number | null>(null);
+  const [copyProjects, setCopyProjects] = useState<{ id: string; name: string }[]>([]);
+  const [copyTargetProject, setCopyTargetProject] = useState('');
+  const [copying, setCopying] = useState(false);
 
   useEffect(() => {
     documentApi.getVersions(doc.id)
@@ -254,6 +260,21 @@ export default function VersionsPanel({ document: doc, onClose }: Props) {
                     >
                       <Download className="h-4 w-4 text-slate-500" />
                     </button>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        setCopyVersion(v.versionNumber);
+                        setCopyTargetProject('');
+                        try {
+                          const res = await projectApi.getMine();
+                          setCopyProjects(res.data?.data ?? res.data ?? []);
+                        } catch { setCopyProjects([]); }
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-slate-200"
+                      title="Copy this version to another project"
+                    >
+                      <Copy className="h-4 w-4 text-emerald-500" />
+                    </button>
                   </div>
                 </div>
                 <p className="text-xs text-slate-500">{v.fileName} • {formatBytes(v.fileSizeBytes)}</p>
@@ -312,6 +333,46 @@ export default function VersionsPanel({ document: doc, onClose }: Props) {
           ))
         )}
       </div>
+      {/* Copy to Project Modal */}
+      {copyVersion !== null && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40" onClick={() => setCopyVersion(null)}>
+          <div className="bg-white rounded-xl shadow-xl p-6 w-[420px]" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">Copy Version {copyVersion} to Project</h3>
+            <p className="text-sm text-gray-600 mb-4">Document: <span className="font-medium">{doc.title}</span></p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Target Project</label>
+            <select
+              value={copyTargetProject}
+              onChange={e => setCopyTargetProject(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-primary-400"
+            >
+              <option value="">— Choose a project —</option>
+              {copyProjects.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setCopyVersion(null)}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+              <button
+                disabled={!copyTargetProject || copying}
+                onClick={async () => {
+                  setCopying(true);
+                  try {
+                    await documentApi.copyVersionToProject(doc.id, copyVersion, { targetProjectId: copyTargetProject });
+                    setCopyVersion(null);
+                    alert('Version copied successfully!');
+                  } catch { alert('Failed to copy version'); }
+                  finally { setCopying(false); }
+                }}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2"
+              >
+                {copying && <Loader2 className="h-4 w-4 animate-spin" />}
+                Copy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

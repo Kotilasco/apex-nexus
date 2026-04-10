@@ -22,7 +22,11 @@ export default function UploadModal({ folderId, projectId, onClose, onComplete }
 
   const onDrop = useCallback((accepted: File[]) => {
     setFiles(accepted);
-    if (!title && accepted.length > 0) setTitle(accepted[0].name);
+    if (!title && accepted.length > 0) {
+      const name = accepted[0].name;
+      const dotIdx = name.lastIndexOf('.');
+      setTitle(dotIdx > 0 ? name.substring(0, dotIdx) : name);
+    }
   }, [title]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

@@ -1,23 +1,22 @@
 package com.apexnexus.document.dto;
 
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.Map;
 import java.util.UUID;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UpdateDocumentRequest {
+public class CopyVersionToProjectRequest {
+    @NotNull(message = "Target project ID is required")
+    private UUID targetProjectId;
+
+    private UUID targetFolderId;
+
     private String title;
-    private String description;
-    private String status;
-    private UUID folderId;
-    private UUID projectId;
-    private String[] tags;
-    private Map<String, Object> metadata;
 }

@@ -55,16 +55,32 @@ public class DocumentService {
         // Store encrypted file in MinIO
         storageService.storeFile(fileData, storageKey, file.getContentType());
 
+        // Resolve projectId from folder if not explicitly provided
+        UUID resolvedProjectId = request.getProjectId();
+        if (resolvedProjectId == null && request.getFolderId() != null) {
+            try {
+                UUID folderProjectId = jdbcTemplate.queryForObject(
+                    "SELECT project_id FROM folders WHERE id = ?",
+                    UUID.class, request.getFolderId());
+                if (folderProjectId != null) {
+                    resolvedProjectId = folderProjectId;
+                    log.info("Inherited project {} from folder {}", resolvedProjectId, request.getFolderId());
+                }
+            } catch (Exception e) {
+                log.debug("Could not resolve project from folder {}", request.getFolderId());
+            }
+        }
+
         // Resolve retention/compliance defaults from project settings
         int retentionYears = request.getRetentionPeriodYears() != null ? request.getRetentionPeriodYears() : 20;
         boolean privacyRedaction = false;
 
-        if (request.getProjectId() != null) {
+        if (resolvedProjectId != null) {
             try {
                 Map<String, Object> project = jdbcTemplate.queryForMap(
                     "SELECT default_retention_period_years, privacy_redaction_enabled, " +
                     "jurisdiction_code FROM projects WHERE id = ?",
-                    request.getProjectId());
+                    resolvedProjectId);
 
                 Integer projectRetention = (Integer) project.get("default_retention_period_years");
                 if (projectRetention != null && projectRetention > retentionYears) {
@@ -92,14 +108,14 @@ public class DocumentService {
                     }
                 }
             } catch (Exception e) {
-                log.warn("Could not look up project {} for retention defaults", request.getProjectId(), e);
+                log.warn("Could not look up project {} for retention defaults", resolvedProjectId, e);
             }
         }
 
         Document doc = Document.builder()
                 .objectGuid(objectGuid)
                 .folderId(request.getFolderId())
-                .projectId(request.getProjectId())
+                .projectId(resolvedProjectId)
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .mimeType(file.getContentType())
@@ -208,6 +224,46 @@ public class DocumentService {
         }
         if (request.getMetadata() != null) {
             doc.setMetadataJson(request.getMetadata());
+        }
+
+        // Assign document to a project — also inherit retention/privacy settings
+        if (request.getProjectId() != null) {
+            doc.setProjectId(request.getProjectId());
+            try {
+                Map<String, Object> project = jdbcTemplate.queryForMap(
+                    "SELECT default_retention_period_years, privacy_redaction_enabled, " +
+                    "jurisdiction_code FROM projects WHERE id = ?",
+                    request.getProjectId());
+
+                Integer projectRetention = (Integer) project.get("default_retention_period_years");
+                int currentRetention = doc.getRetentionPeriodYears() != null ? doc.getRetentionPeriodYears() : 0;
+                if (projectRetention != null && projectRetention > currentRetention) {
+                    doc.setRetentionPeriodYears(projectRetention);
+                }
+
+                Boolean projectPrivacy = (Boolean) project.get("privacy_redaction_enabled");
+                if (Boolean.TRUE.equals(projectPrivacy)) {
+                    doc.setPrivacyRedactionEnabled(true);
+                }
+
+                String jurisdictionCode = (String) project.get("jurisdiction_code");
+                if (jurisdictionCode != null && !jurisdictionCode.isBlank()) {
+                    try {
+                        Integer minRetention = jdbcTemplate.queryForObject(
+                            "SELECT MAX(jrr.min_retention_years) FROM jurisdiction_retention_rules jrr " +
+                            "JOIN jurisdictions j ON jrr.jurisdiction_id = j.id WHERE j.code = ?",
+                            Integer.class, jurisdictionCode);
+                        int docRetention = doc.getRetentionPeriodYears() != null ? doc.getRetentionPeriodYears() : 0;
+                        if (minRetention != null && minRetention > docRetention) {
+                            doc.setRetentionPeriodYears(minRetention);
+                        }
+                    } catch (Exception e) {
+                        log.debug("No jurisdiction retention rules found for {}", jurisdictionCode);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Could not look up project {} for retention defaults on assign", request.getProjectId(), e);
+            }
         }
 
         doc = documentRepository.save(doc);
@@ -667,6 +723,113 @@ public class DocumentService {
                 .build());
 
         return storageService.retrieveFile(version.getStorageKey());
+    }
+
+    // ============ COPY VERSION TO PROJECT ============
+
+    @Transactional
+    public DocumentDto copyVersionToProject(UUID documentId, int versionNumber,
+                                             CopyVersionToProjectRequest request, UUID userId) throws Exception {
+        Document sourceDoc = findDocumentOrThrow(documentId);
+        DocumentVersion sourceVersion = versionRepository.findByDocumentIdAndVersionNumber(documentId, versionNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("Version", "number", versionNumber));
+
+        // Retrieve the file from storage (decrypted)
+        byte[] fileData = storageService.retrieveFile(sourceVersion.getStorageKey());
+        String sha256 = storageService.calculateSha256(fileData);
+
+        String title = (request.getTitle() != null && !request.getTitle().isBlank())
+                ? request.getTitle() : sourceDoc.getTitle();
+        String objectGuid = UUID.randomUUID().toString().replace("-", "");
+        String fileName = buildFileName(sourceDoc);
+        String storageKey = String.format("documents/%s/v1/%s", objectGuid, fileName);
+
+        // Store encrypted copy in MinIO
+        storageService.storeFile(fileData, storageKey, sourceDoc.getMimeType());
+
+        // Resolve retention/privacy from target project
+        int retentionYears = sourceDoc.getRetentionPeriodYears() != null ? sourceDoc.getRetentionPeriodYears() : 20;
+        boolean privacyRedaction = false;
+
+        try {
+            Map<String, Object> project = jdbcTemplate.queryForMap(
+                "SELECT default_retention_period_years, privacy_redaction_enabled, " +
+                "jurisdiction_code FROM projects WHERE id = ?",
+                request.getTargetProjectId());
+
+            Integer projectRetention = (Integer) project.get("default_retention_period_years");
+            if (projectRetention != null && projectRetention > retentionYears) {
+                retentionYears = projectRetention;
+            }
+            Boolean projectPrivacy = (Boolean) project.get("privacy_redaction_enabled");
+            if (Boolean.TRUE.equals(projectPrivacy)) {
+                privacyRedaction = true;
+            }
+            String jurisdictionCode = (String) project.get("jurisdiction_code");
+            if (jurisdictionCode != null && !jurisdictionCode.isBlank()) {
+                try {
+                    Integer minRetention = jdbcTemplate.queryForObject(
+                        "SELECT MAX(jrr.min_retention_years) FROM jurisdiction_retention_rules jrr " +
+                        "JOIN jurisdictions j ON jrr.jurisdiction_id = j.id WHERE j.code = ?",
+                        Integer.class, jurisdictionCode);
+                    if (minRetention != null && minRetention > retentionYears) {
+                        retentionYears = minRetention;
+                    }
+                } catch (Exception e) {
+                    log.debug("No jurisdiction retention rules for {}", jurisdictionCode);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not look up target project {} for retention", request.getTargetProjectId(), e);
+        }
+
+        Document newDoc = Document.builder()
+                .objectGuid(objectGuid)
+                .folderId(request.getTargetFolderId())
+                .projectId(request.getTargetProjectId())
+                .title(title)
+                .description(sourceDoc.getDescription())
+                .mimeType(sourceDoc.getMimeType())
+                .fileExtension(sourceDoc.getFileExtension())
+                .sha256Hash(sha256)
+                .fileSizeBytes((long) fileData.length)
+                .storageKey(storageKey)
+                .authorId(userId)
+                .tags(sourceDoc.getTags())
+                .metadataJson(sourceDoc.getMetadataJson() != null ? new HashMap<>(sourceDoc.getMetadataJson()) : new HashMap<>())
+                .retentionPeriodYears(retentionYears)
+                .retentionStartDate(Instant.now())
+                .privacyRedactionEnabled(privacyRedaction)
+                .build();
+
+        newDoc = documentRepository.save(newDoc);
+
+        DocumentVersion newVersion = DocumentVersion.builder()
+                .document(newDoc)
+                .versionNumber(1)
+                .sha256Hash(sha256)
+                .fileSizeBytes((long) fileData.length)
+                .storageKey(storageKey)
+                .authorId(userId)
+                .changeSummary("Copied from \"" + sourceDoc.getTitle() + "\" v" + versionNumber)
+                .build();
+        versionRepository.save(newVersion);
+
+        auditPublisher.publish(AuditEvent.builder()
+                .userId(userId)
+                .action("COPY_VERSION_TO_PROJECT")
+                .resourceType("DOCUMENT")
+                .resourceId(newDoc.getId())
+                .resourceName(newDoc.getTitle())
+                .details(Map.of(
+                        "sourceDocumentId", documentId.toString(),
+                        "sourceVersion", versionNumber,
+                        "targetProjectId", request.getTargetProjectId().toString()))
+                .build());
+
+        searchIndexPublisher.publishIndex(newDoc, fileData);
+
+        return mapToDto(newDoc);
     }
 
     // ============ HELPERS ============

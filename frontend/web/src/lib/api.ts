@@ -104,6 +104,10 @@ export const documentApi = {
   updateContent: (id: string, content: string) =>
     api.put(`/documents/${id}/content`, { content }),
   delete: (id: string) => api.delete(`/documents/${id}`),
+  update: (id: string, data: { title?: string; description?: string; status?: string; folderId?: string; projectId?: string; tags?: string[]; metadata?: Record<string, unknown> }) =>
+    api.put(`/documents/${id}`, data),
+  copyVersionToProject: (docId: string, versionNumber: number, data: { targetProjectId: string; targetFolderId?: string; title?: string }) =>
+    api.post(`/documents/${docId}/versions/${versionNumber}/copy-to-project`, data),
   checkout: (id: string) => api.post(`/documents/${id}/checkout`),
   checkin: (id: string, data: FormData) =>
     api.post(`/documents/${id}/checkin`, data),
