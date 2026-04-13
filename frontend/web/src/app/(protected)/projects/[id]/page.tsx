@@ -694,22 +694,28 @@ export default function ProjectDetailPage() {
                       <p className="text-[10px] text-slate-400 mt-0.5">{plugin.vendor} &middot; v{plugin.version}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => toggleProjectPlugin(plugin)}
-                    disabled={togglingPlugin === plugin.pluginId}
-                    className={`ml-3 px-3 py-1.5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition ${
-                      plugin.activeInProject
-                        ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50'
-                        : 'bg-primary-600 text-white hover:bg-primary-700'
-                    } disabled:opacity-50`}>
-                    {togglingPlugin === plugin.pluginId ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : plugin.activeInProject ? (
-                      <><PowerOff className="h-3.5 w-3.5" /> Deactivate</>
-                    ) : (
-                      <><Power className="h-3.5 w-3.5" /> Activate</>
-                    )}
-                  </button>
+                  {isProjectAdmin ? (
+                    <button
+                      onClick={() => toggleProjectPlugin(plugin)}
+                      disabled={togglingPlugin === plugin.pluginId}
+                      className={`ml-3 px-3 py-1.5 text-xs font-medium rounded-lg flex items-center gap-1.5 transition ${
+                        plugin.activeInProject
+                          ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50'
+                          : 'bg-primary-600 text-white hover:bg-primary-700'
+                      } disabled:opacity-50`}>
+                      {togglingPlugin === plugin.pluginId ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : plugin.activeInProject ? (
+                        <><PowerOff className="h-3.5 w-3.5" /> Deactivate</>
+                      ) : (
+                        <><Power className="h-3.5 w-3.5" /> Activate</>
+                      )}
+                    </button>
+                  ) : (
+                    <span className={`ml-3 px-3 py-1.5 text-xs font-medium rounded-lg ${plugin.activeInProject ? 'text-green-600' : 'text-slate-400'}`}>
+                      {plugin.activeInProject ? 'Active' : 'Inactive'}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -725,10 +731,12 @@ export default function ProjectDetailPage() {
               <h3 className="text-sm font-semibold text-slate-700">Sub-Projects</h3>
               <p className="text-xs text-slate-400 mt-1">Create and manage smaller projects nested under this project for better organisation.</p>
             </div>
-            <button onClick={() => setShowCreateSub(true)}
-              className="px-3 py-1.5 bg-primary-600 text-white text-xs font-medium rounded-lg hover:bg-primary-700 flex items-center gap-1.5">
-              <Plus className="h-3.5 w-3.5" /> New Sub-Project
-            </button>
+            {isProjectAdmin && (
+              <button onClick={() => setShowCreateSub(true)}
+                className="px-3 py-1.5 bg-primary-600 text-white text-xs font-medium rounded-lg hover:bg-primary-700 flex items-center gap-1.5">
+                <Plus className="h-3.5 w-3.5" /> New Sub-Project
+              </button>
+            )}
           </div>
 
           {subProjectsLoading ? (
@@ -739,10 +747,12 @@ export default function ProjectDetailPage() {
             <div className="text-center py-8">
               <Layers className="h-10 w-10 text-slate-300 mx-auto mb-3" />
               <p className="text-sm text-slate-500 mb-3">No sub-projects yet</p>
-              <button onClick={() => setShowCreateSub(true)}
-                className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 inline-flex items-center gap-2">
-                <Plus className="h-4 w-4" /> Create Sub-Project
-              </button>
+              {isProjectAdmin && (
+                <button onClick={() => setShowCreateSub(true)}
+                  className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 inline-flex items-center gap-2">
+                  <Plus className="h-4 w-4" /> Create Sub-Project
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -839,8 +849,8 @@ export default function ProjectDetailPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Workflow Definition</label>
-                <select value={selectedWfId} onChange={e => setSelectedWfId(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
+                <select value={selectedWfId} onChange={e => setSelectedWfId(e.target.value)} disabled={!isProjectAdmin}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white disabled:opacity-60 disabled:cursor-not-allowed">
                   <option value="">None (no default workflow)</option>
                   {workflowDefs.map(wf => (
                     <option key={wf.id} value={wf.id}>{wf.name} — {wf.steps?.length ?? 0} steps</option>
@@ -863,10 +873,12 @@ export default function ProjectDetailPage() {
                 </div>
               )}
 
-              <button onClick={handleSaveDefaultWorkflow} disabled={savingWf}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
-                {savingWf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Workflow Setting
-              </button>
+              {isProjectAdmin && (
+                <button onClick={handleSaveDefaultWorkflow} disabled={savingWf}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
+                  {savingWf ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Workflow Setting
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -897,8 +909,8 @@ export default function ProjectDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> Jurisdiction</label>
-                  <select value={retentionForm.jurisdictionCode} onChange={e => setRetentionForm(f => ({ ...f, jurisdictionCode: e.target.value }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
+                  <select value={retentionForm.jurisdictionCode} onChange={e => setRetentionForm(f => ({ ...f, jurisdictionCode: e.target.value }))} disabled={!isProjectAdmin}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white disabled:opacity-60 disabled:cursor-not-allowed">
                     <option value="">None selected</option>
                     {jurisdictions.map(j => (
                       <option key={j.code} value={j.code}>{j.name} ({j.code})</option>
@@ -908,16 +920,16 @@ export default function ProjectDetailPage() {
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Default Retention (years)</label>
                   <input type="number" min={0} max={100} value={retentionForm.defaultRetentionPeriodYears}
-                    onChange={e => setRetentionForm(f => ({ ...f, defaultRetentionPeriodYears: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none" />
+                    onChange={e => setRetentionForm(f => ({ ...f, defaultRetentionPeriodYears: parseInt(e.target.value) || 0 }))} disabled={!isProjectAdmin}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none disabled:opacity-60 disabled:cursor-not-allowed" />
                 </div>
               </div>
 
               {/* Compliance Category */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1 flex items-center gap-1"><Shield className="h-3.5 w-3.5" /> Compliance Category</label>
-                <select value={retentionForm.complianceCategory} onChange={e => setRetentionForm(f => ({ ...f, complianceCategory: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
+                <select value={retentionForm.complianceCategory} onChange={e => setRetentionForm(f => ({ ...f, complianceCategory: e.target.value }))} disabled={!isProjectAdmin}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white disabled:opacity-60 disabled:cursor-not-allowed">
                   <option value="">None</option>
                   <option value="GDPR">GDPR</option>
                   <option value="HIPAA">HIPAA</option>
@@ -929,9 +941,9 @@ export default function ProjectDetailPage() {
               </div>
 
               {/* Privacy Redaction */}
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className={`flex items-center gap-2 ${isProjectAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
                 <input type="checkbox" checked={retentionForm.privacyRedactionEnabled}
-                  onChange={e => setRetentionForm(f => ({ ...f, privacyRedactionEnabled: e.target.checked }))}
+                  onChange={e => setRetentionForm(f => ({ ...f, privacyRedactionEnabled: e.target.checked }))} disabled={!isProjectAdmin}
                   className="rounded border-slate-300 text-primary-600 focus:ring-primary-500" />
                 <span className="text-sm text-slate-700 flex items-center gap-1"><Lock className="h-3.5 w-3.5" /> Enable privacy redaction for sensitive fields</span>
               </label>
@@ -943,25 +955,29 @@ export default function ProjectDetailPage() {
                   {retentionForm.retentionDocumentTypes.map(dt => (
                     <span key={dt} className="px-2.5 py-1 bg-primary-50 text-primary-700 text-xs font-medium rounded-full flex items-center gap-1">
                       {dt}
-                      <button onClick={() => setRetentionForm(f => ({ ...f, retentionDocumentTypes: f.retentionDocumentTypes.filter(t => t !== dt) }))}
-                        className="hover:text-red-600"><X className="h-3 w-3" /></button>
+                      {isProjectAdmin && (
+                        <button onClick={() => setRetentionForm(f => ({ ...f, retentionDocumentTypes: f.retentionDocumentTypes.filter(t => t !== dt) }))}
+                          className="hover:text-red-600"><X className="h-3 w-3" /></button>
+                      )}
                     </span>
                   ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <select value={newDocType} onChange={e => setNewDocType(e.target.value)}
-                    className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
-                    <option value="">Add category...</option>
-                    {documentCategories.filter(c => !retentionForm.retentionDocumentTypes.includes(c)).map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                  <button onClick={() => { if (newDocType) { setRetentionForm(f => ({ ...f, retentionDocumentTypes: [...f.retentionDocumentTypes, newDocType] })); setNewDocType(''); } }}
-                    disabled={!newDocType}
-                    className="px-3 py-1.5 bg-primary-600 text-white text-xs rounded-lg hover:bg-primary-700 disabled:opacity-50">
-                    Add
-                  </button>
-                </div>
+                {isProjectAdmin && (
+                  <div className="flex items-center gap-2">
+                    <select value={newDocType} onChange={e => setNewDocType(e.target.value)}
+                      className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
+                      <option value="">Add category...</option>
+                      {documentCategories.filter(c => !retentionForm.retentionDocumentTypes.includes(c)).map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <button onClick={() => { if (newDocType) { setRetentionForm(f => ({ ...f, retentionDocumentTypes: [...f.retentionDocumentTypes, newDocType] })); setNewDocType(''); } }}
+                      disabled={!newDocType}
+                      className="px-3 py-1.5 bg-primary-600 text-white text-xs rounded-lg hover:bg-primary-700 disabled:opacity-50">
+                      Add
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Jurisdiction Rules Table */}
@@ -995,10 +1011,12 @@ export default function ProjectDetailPage() {
                 </div>
               )}
 
-              <button onClick={handleSaveRetention} disabled={savingRetention}
-                className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
-                {savingRetention ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Compliance Settings
-              </button>
+              {isProjectAdmin && (
+                <button onClick={handleSaveRetention} disabled={savingRetention}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
+                  {savingRetention ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Compliance Settings
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1019,10 +1037,10 @@ export default function ProjectDetailPage() {
                   <p className="text-xs text-slate-400 mt-0.5">Enable AI-powered document analysis, classification, and anomaly detection for this project.</p>
                 </div>
               </div>
-              <button onClick={handleToggleAi} disabled={togglingAi}
+              <button onClick={handleToggleAi} disabled={togglingAi || !isProjectAdmin}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
                   project.aiEnabled ? 'bg-purple-600' : 'bg-slate-300'
-                } disabled:opacity-50`}>
+                } disabled:opacity-50 disabled:cursor-not-allowed`}>
                 {togglingAi ? (
                   <Loader2 className="h-4 w-4 animate-spin text-white absolute left-1/2 -translate-x-1/2" />
                 ) : (
