@@ -11,6 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -75,6 +76,19 @@ public class ProjectController {
         UUID removedBy = (UUID) authentication.getPrincipal();
         projectService.removeMember(projectId, userId, removedBy);
         return ResponseEntity.ok(ApiResponse.ok("Member removed", null));
+    }
+
+    @PutMapping("/{projectId}/members/{userId}")
+    public ResponseEntity<ApiResponse<ProjectMemberDto>> updateMember(
+            @PathVariable UUID projectId,
+            @PathVariable UUID userId,
+            @RequestBody Map<String, Object> body,
+            Authentication authentication) {
+        UUID updatedBy = (UUID) authentication.getPrincipal();
+        @SuppressWarnings("unchecked")
+        List<String> permissions = (List<String>) body.get("permissions");
+        ProjectMemberDto member = projectService.updateMemberPermissions(projectId, userId, permissions, updatedBy);
+        return ResponseEntity.ok(ApiResponse.ok("Member updated", member));
     }
 
     @GetMapping("/{id}/members")

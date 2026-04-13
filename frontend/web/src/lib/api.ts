@@ -304,6 +304,8 @@ export const projectApi = {
     api.post(`/projects/${id}/members`, data),
   removeMember: (id: string, userId: string) =>
     api.delete(`/projects/${id}/members/${userId}`),
+  updateMember: (id: string, userId: string, permissions: string[]) =>
+    api.put(`/projects/${id}/members/${userId}`, { permissions }),
   getPlugins: (id: string) => api.get(`/projects/${id}/plugins`),
   activatePlugin: (id: string, pluginId: string) =>
     api.post(`/projects/${id}/plugins/${pluginId}/activate`),

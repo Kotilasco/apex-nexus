@@ -27,4 +27,11 @@ body {
     scrollbar-width: thin;
     scrollbar-color: #cbd5e1 transparent;
   }
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }

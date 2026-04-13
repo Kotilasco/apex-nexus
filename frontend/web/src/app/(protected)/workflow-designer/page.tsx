@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { workflowTemplateApi, workflowApi } from '@/lib/api';
 import {
   Play, Square, Circle, ArrowRight, Trash2, Save, Undo2, 
@@ -108,6 +108,13 @@ export default function WorkflowDesignerPage() {
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
   const [editLabelValue, setEditLabelValue] = useState('');
   const [editingDefId, setEditingDefId] = useState<string | null>(null);
+
+  const canvasExtent = useMemo(() => {
+    if (nodes.length === 0) return { w: 2000, h: 1200 };
+    const maxX = Math.max(...nodes.map(n => n.x)) + 300;
+    const maxY = Math.max(...nodes.map(n => n.y)) + 200;
+    return { w: Math.max(2000, maxX), h: Math.max(1200, maxY) };
+  }, [nodes]);
   const [saving, setSaving] = useState(false);
   const [escalationRules, setEscalationRules] = useState<EscalationRule[]>([]);
   const [showEscalation, setShowEscalation] = useState(false);
@@ -245,7 +252,8 @@ export default function WorkflowDesignerPage() {
   }
 
   const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
-    if (e.target === canvasRef.current) {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'DIV' && !(e.target as HTMLElement).closest('[data-node]')) {
       setSelectedNode(null);
       setSelectedEdge(null);
       setConnectingFrom(null);
@@ -269,17 +277,21 @@ export default function WorkflowDesignerPage() {
     setSelectedEdge(null);
     const rect = canvasRef.current?.getBoundingClientRect();
     if (rect) {
-      setDragOffset({ x: e.clientX - rect.left - node.x * zoom - pan.x, y: e.clientY - rect.top - node.y * zoom - pan.y });
+      const sl = canvasRef.current?.scrollLeft || 0;
+      const st = canvasRef.current?.scrollTop || 0;
+      setDragOffset({ x: e.clientX - rect.left + sl - node.x * zoom, y: e.clientY - rect.top + st - node.y * zoom });
     }
   }, [nodes, connectingFrom, zoom, pan]);
 
   const handleCanvasMouseMove = useCallback((e: React.MouseEvent) => {
     if (!draggingNode || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left - dragOffset.x - pan.x) / zoom;
-    const y = (e.clientY - rect.top - dragOffset.y - pan.y) / zoom;
+    const sl = canvasRef.current.scrollLeft;
+    const st = canvasRef.current.scrollTop;
+    const x = (e.clientX - rect.left + sl - dragOffset.x) / zoom;
+    const y = (e.clientY - rect.top + st - dragOffset.y) / zoom;
     setNodes(prev => prev.map(n => n.id === draggingNode ? { ...n, x: Math.max(0, x), y: Math.max(0, y) } : n));
-  }, [draggingNode, dragOffset, zoom, pan]);
+  }, [draggingNode, dragOffset, zoom]);
 
   const handleCanvasMouseUp = useCallback(() => {
     setDraggingNode(null);
@@ -590,10 +602,10 @@ export default function WorkflowDesignerPage() {
         </div>
 
         {/* Canvas */}
-        <div ref={canvasRef} className="flex-1 relative overflow-hidden bg-[#f8fafc]"
-          style={{ backgroundImage: 'radial-gradient(circle, #e2e8f0 1px, transparent 1px)', backgroundSize: `${20 * zoom}px ${20 * zoom}px`, backgroundPosition: `${pan.x}px ${pan.y}px` }}
+        <div ref={canvasRef} className="flex-1 relative overflow-auto bg-[#f8fafc]"
           onMouseDown={handleCanvasMouseDown} onMouseMove={handleCanvasMouseMove} onMouseUp={handleCanvasMouseUp} onMouseLeave={handleCanvasMouseUp}>
-          <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }}>
+          <div style={{ width: canvasExtent.w * zoom, height: canvasExtent.h * zoom, minWidth: '100%', minHeight: '100%', position: 'relative', backgroundImage: 'radial-gradient(circle, #e2e8f0 1px, transparent 1px)', backgroundSize: `${20 * zoom}px ${20 * zoom}px` }}>
+          <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ transform: `scale(${zoom})`, transformOrigin: '0 0' }}>
             <defs><marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#64748b" /></marker></defs>
             {edges.map(edge => {
               const fromNode = nodes.find(n => n.id === edge.from);
@@ -621,9 +633,9 @@ export default function WorkflowDesignerPage() {
           </svg>
 
           {/* Nodes */}
-          <div className="absolute inset-0" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0' }}>
+          <div className="absolute inset-0" style={{ transform: `scale(${zoom})`, transformOrigin: '0 0' }}>
             {nodes.map(node => (
-              <div key={node.id}
+              <div key={node.id} data-node
                 className={`absolute select-none cursor-grab active:cursor-grabbing group transition-shadow ${selectedNode === node.id ? 'ring-2 ring-primary-400 ring-offset-2' : ''}`}
                 style={{ left: node.x, top: node.y, minWidth: 140 }} onMouseDown={(e) => handleNodeMouseDown(e, node.id)} onDoubleClick={() => startEditLabel(node.id)}>
                 <div className="rounded-xl px-4 py-3 shadow-sm border-2 bg-white" style={{ borderColor: node.color }}>
@@ -658,6 +670,7 @@ export default function WorkflowDesignerPage() {
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

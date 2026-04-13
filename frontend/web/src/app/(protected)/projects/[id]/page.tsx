@@ -4,13 +4,13 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { projectApi, authApi, documentApi, workflowApi, jurisdictionApi, pluginApi } from '@/lib/api';
 import { useProjectStore } from '@/lib/project-store';
-import type { Project, ProjectMember, User, Document, Folder, WorkflowDefinition, Jurisdiction, JurisdictionRetentionRule, ProjectPluginStatus } from '@/lib/types';
+import type { Project, ProjectMember, User, Document, Folder, WorkflowDefinition, Jurisdiction, JurisdictionRetentionRule, ProjectPluginStatus, Role } from '@/lib/types';
 import { formatDateTime, formatBytes, getFileIcon } from '@/lib/utils';
 import {
   FolderKanban, Plus, Users, FileText, Settings, ArrowLeft, X,
   ChevronRight, Home, Upload, FolderPlus, Download, UserPlus, UserMinus,
   Eye, Trash2, GitBranch, Save, Loader2, CheckCircle2, Info, Shield,
-  Clock, Lock, AlertTriangle, BookOpen, Plug, Power, PowerOff, Brain, Layers,
+  Clock, Lock, AlertTriangle, BookOpen, Plug, Power, PowerOff, Brain, Layers, Pencil, Check,
 } from 'lucide-react';
 import UploadModal from '@/components/documents/UploadModal';
 
@@ -37,8 +37,11 @@ export default function ProjectDetailPage() {
   const [newFolderName, setNewFolderName] = useState('');
   const [showAddMember, setShowAddMember] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
-  const [addMemberForm, setAddMemberForm] = useState({ userId: '', roleId: 'member', permissions: ['READ', 'WRITE'] });
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [addMemberForm, setAddMemberForm] = useState({ userId: '', roleId: '', permissions: ['READ', 'WRITE'] });
   const [addMemberLoading, setAddMemberLoading] = useState(false);
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [editPerms, setEditPerms] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'documents' | 'members' | 'sub-projects' | 'plugins' | 'workflow' | 'retention' | 'settings'>('documents');
 
   // Sub-projects
@@ -253,9 +256,16 @@ export default function ProjectDetailPage() {
   const openAddMember = async () => {
     setShowAddMember(true);
     try {
-      const res = await authApi.getUsers(0, 100);
-      const data = res.data?.data ?? res.data;
-      setUsers(data?.content ?? data ?? []);
+      const [usersRes, rolesRes] = await Promise.all([authApi.getUsers(0, 100), authApi.getRoles()]);
+      const uData = usersRes.data?.data ?? usersRes.data;
+      setUsers(uData?.content ?? uData ?? []);
+      const rData = rolesRes.data?.data ?? rolesRes.data;
+      const rolesList = Array.isArray(rData) ? rData : rData?.content ?? [];
+      setRoles(rolesList);
+      if (rolesList.length > 0 && !addMemberForm.roleId) {
+        const viewerRole = rolesList.find((r: Role) => r.name === 'VIEWER');
+        setAddMemberForm(f => ({ ...f, roleId: (viewerRole ?? rolesList[0]).id }));
+      }
     } catch { /* ignore */ }
   };
 
@@ -265,7 +275,7 @@ export default function ProjectDetailPage() {
     try {
       await projectApi.addMember(projectId, addMemberForm);
       setShowAddMember(false);
-      setAddMemberForm({ userId: '', roleId: 'member', permissions: ['READ', 'WRITE'] });
+      setAddMemberForm({ userId: '', roleId: '', permissions: ['READ', 'WRITE'] });
       const res = await projectApi.getMembers(projectId);
       setMembers(res.data?.data ?? res.data ?? []);
     } catch { alert('Failed to add member'); }
@@ -279,6 +289,20 @@ export default function ProjectDetailPage() {
       const res = await projectApi.getMembers(projectId);
       setMembers(res.data?.data ?? res.data ?? []);
     } catch { alert('Failed to remove member'); }
+  };
+
+  const startEditPerms = (m: ProjectMember) => {
+    setEditingMemberId(m.userId);
+    setEditPerms([...(m.effectivePermissions ?? m.permissions ?? [])]);
+  };
+
+  const handleSavePerms = async (userId: string) => {
+    try {
+      await projectApi.updateMember(projectId, userId, editPerms);
+      const res = await projectApi.getMembers(projectId);
+      setMembers(res.data?.data ?? res.data ?? []);
+      setEditingMemberId(null);
+    } catch { alert('Failed to update permissions'); }
   };
 
   const openInDocuments = () => {
@@ -543,26 +567,63 @@ export default function ProjectDetailPage() {
                 const displayName = m.fullName?.trim() || m.username || m.userId;
                 const initials = (m.username || m.fullName || m.userId || '??').slice(0, 2).toUpperCase();
                 return (
-                  <div key={m.userId} className="flex items-center justify-between bg-slate-50 rounded-lg px-4 py-3 border border-slate-200">
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-bold">
-                        {initials}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-700">{displayName}</p>
-                        {m.email && <p className="text-xs text-slate-400">{m.email}</p>}
-                        {m.roleName && <span className="text-[10px] text-primary-600 font-medium">{m.roleName}</span>}
-                        <div className="flex gap-1 mt-0.5 flex-wrap">
-                          {(m.effectivePermissions ?? m.permissions ?? []).map(p => (
-                            <span key={p} className="px-1.5 py-0.5 bg-white text-slate-500 text-[10px] rounded font-medium border border-slate-200">{p}</span>
-                          ))}
+                  <div key={m.userId} className="bg-slate-50 rounded-lg px-4 py-3 border border-slate-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-bold">
+                          {initials}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-slate-700">{displayName}</p>
+                          {m.email && <p className="text-xs text-slate-400">{m.email}</p>}
+                          {m.roleName && <span className="text-[10px] text-primary-600 font-medium">{m.roleName}</span>}
                         </div>
                       </div>
+                      <div className="flex items-center gap-1">
+                        {editingMemberId === m.userId ? (
+                          <>
+                            <button onClick={() => handleSavePerms(m.userId)}
+                              className="p-1.5 rounded-lg hover:bg-green-50 text-green-600 hover:text-green-700" title="Save permissions">
+                              <Check className="h-4 w-4" />
+                            </button>
+                            <button onClick={() => setEditingMemberId(null)}
+                              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600" title="Cancel">
+                              <X className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <button onClick={() => startEditPerms(m)}
+                            className="p-1.5 rounded-lg hover:bg-primary-50 text-slate-400 hover:text-primary-600" title="Edit permissions">
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        )}
+                        <button onClick={() => handleRemoveMember(m.userId)}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600" title="Remove member">
+                          <UserMinus className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
-                    <button onClick={() => handleRemoveMember(m.userId)}
-                      className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600" title="Remove member">
-                      <UserMinus className="h-4 w-4" />
-                    </button>
+                    {editingMemberId === m.userId ? (
+                      <div className="mt-2 flex gap-1.5 flex-wrap">
+                        {permissionOptions.map(p => (
+                          <button key={p} type="button"
+                            onClick={() => setEditPerms(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])}
+                            className={`px-2 py-0.5 text-[10px] rounded font-medium border transition-colors ${
+                              editPerms.includes(p)
+                                ? 'bg-primary-100 text-primary-700 border-primary-300'
+                                : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
+                            }`}>
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-1.5 ml-12 flex gap-1 flex-wrap">
+                        {(m.effectivePermissions ?? m.permissions ?? []).map(p => (
+                          <span key={p} className="px-1.5 py-0.5 bg-white text-slate-500 text-[10px] rounded font-medium border border-slate-200">{p}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -974,7 +1035,7 @@ export default function ProjectDetailPage() {
       {/* Upload Modal */}
       {showUpload && (
         <UploadModal projectId={projectId} folderId={currentFolder} onClose={() => setShowUpload(false)}
-          onSuccess={() => { setShowUpload(false); loadDocuments(); }} />
+          onComplete={() => { setShowUpload(false); loadDocuments(); }} />
       )}
 
       {/* Add Member Modal */}
@@ -997,6 +1058,15 @@ export default function ProjectDetailPage() {
                 </select>
               </div>
               <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                <select value={addMemberForm.roleId} onChange={e => setAddMemberForm(f => ({ ...f, roleId: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white">
+                  {roles.map(r => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Permissions</label>
                 <div className="flex flex-wrap gap-2">
                   {permissionOptions.map(perm => (
@@ -1014,7 +1084,7 @@ export default function ProjectDetailPage() {
             </div>
             <div className="flex justify-end gap-2 p-5 border-t border-slate-200">
               <button onClick={() => setShowAddMember(false)} className="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50">Cancel</button>
-              <button onClick={handleAddMember} disabled={addMemberLoading || !addMemberForm.userId}
+              <button onClick={handleAddMember} disabled={addMemberLoading || !addMemberForm.userId || !addMemberForm.roleId}
                 className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
                 {addMemberLoading && <Loader2 className="h-4 w-4 animate-spin" />} Add Member
               </button>

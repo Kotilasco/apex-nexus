@@ -209,6 +209,32 @@ public class ProjectService {
                 .build());
     }
 
+    @Transactional
+    public ProjectMemberDto updateMemberPermissions(UUID projectId, UUID userId, List<String> permissions, UUID updatedBy) {
+        ProjectMember member = memberRepository.findByProjectIdAndUserId(projectId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("ProjectMember", "userId", userId));
+
+        long mask = 0L;
+        if (permissions != null) {
+            for (String perm : permissions) {
+                Long bit = PERMISSION_MAP.get(perm.toUpperCase());
+                if (bit != null) mask |= bit;
+            }
+        }
+        member.setPermissionsMask(mask);
+        member = memberRepository.save(member);
+
+        auditPublisher.publish(AuditEvent.builder()
+                .userId(updatedBy)
+                .action("PROJECT_MEMBER_UPDATED")
+                .resourceType("PROJECT")
+                .resourceId(projectId)
+                .details(Map.of("memberId", userId.toString(), "permissions", String.join(",", permissions != null ? permissions : List.of())))
+                .build());
+
+        return toMemberDto(member);
+    }
+
     @Transactional(readOnly = true)
     public List<ProjectMemberDto> getProjectMembers(UUID projectId) {
         return memberRepository.findByProjectId(projectId).stream()
