@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { projectApi, authApi, documentApi, workflowApi, jurisdictionApi, pluginApi } from '@/lib/api';
 import { useProjectStore } from '@/lib/project-store';
+import { useAuthStore } from '@/lib/auth-store';
 import type { Project, ProjectMember, User, Document, Folder, WorkflowDefinition, Jurisdiction, JurisdictionRetentionRule, ProjectPluginStatus, Role } from '@/lib/types';
 import { formatDateTime, formatBytes, getFileIcon } from '@/lib/utils';
 import {
@@ -83,6 +84,12 @@ export default function ProjectDetailPage() {
   const documentCategories = ['CONTRACT', 'TAX', 'HR', 'PERSONAL_DATA', 'FINANCIAL', 'MEDICAL', 'LEGAL', 'INVOICE', 'REPORT', 'POLICY'];
 
   const permissionOptions = ['READ', 'WRITE', 'DELETE', 'MANAGE', 'APPROVE', 'AI_INVOKE', 'EXPORT', 'ADMIN'];
+
+  const currentUser = useAuthStore(s => s.user);
+  const currentMember = members.find(m => m.userId === currentUser?.id);
+  const currentPerms = currentMember?.effectivePermissions ?? currentMember?.permissions ?? [];
+  const isProjectAdmin = project?.ownerId === currentUser?.id || currentPerms.includes('ADMIN') || currentPerms.includes('MANAGE');
+  const canWrite = isProjectAdmin || currentPerms.includes('WRITE');
 
   const loadProject = useCallback(async () => {
     setLoading(true);
@@ -435,23 +442,25 @@ export default function ProjectDetailPage() {
               ))}
             </div>
             <div className="flex items-center gap-2">
-              {showNewFolder ? (
-                <div className="flex items-center gap-2">
-                  <input value={newFolderName} onChange={e => setNewFolderName(e.target.value)}
-                    placeholder="Folder name..." className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm w-40 focus:ring-2 focus:ring-primary-500 outline-none"
-                    onKeyDown={e => e.key === 'Enter' && handleCreateFolder()} autoFocus />
-                  <button onClick={handleCreateFolder} className="px-3 py-1.5 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700">Create</button>
-                  <button onClick={() => { setShowNewFolder(false); setNewFolderName(''); }} className="p-1.5 rounded-lg hover:bg-slate-100"><X className="h-4 w-4" /></button>
-                </div>
-              ) : (
-                <>
-                  <button onClick={() => setShowNewFolder(true)} className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-1.5">
-                    <FolderPlus className="h-4 w-4" /> New Folder
-                  </button>
-                  <button onClick={() => setShowUpload(true)} className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-1.5">
-                    <Upload className="h-4 w-4" /> Upload
-                  </button>
-                </>
+              {canWrite && (
+                showNewFolder ? (
+                  <div className="flex items-center gap-2">
+                    <input value={newFolderName} onChange={e => setNewFolderName(e.target.value)}
+                      placeholder="Folder name..." className="px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm w-40 focus:ring-2 focus:ring-primary-500 outline-none"
+                      onKeyDown={e => e.key === 'Enter' && handleCreateFolder()} autoFocus />
+                    <button onClick={handleCreateFolder} className="px-3 py-1.5 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700">Create</button>
+                    <button onClick={() => { setShowNewFolder(false); setNewFolderName(''); }} className="p-1.5 rounded-lg hover:bg-slate-100"><X className="h-4 w-4" /></button>
+                  </div>
+                ) : (
+                  <>
+                    <button onClick={() => setShowNewFolder(true)} className="px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-1.5">
+                      <FolderPlus className="h-4 w-4" /> New Folder
+                    </button>
+                    <button onClick={() => setShowUpload(true)} className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-1.5">
+                      <Upload className="h-4 w-4" /> Upload
+                    </button>
+                  </>
+                )
               )}
             </div>
           </div>
@@ -526,10 +535,12 @@ export default function ProjectDetailPage() {
                   <div className="text-center py-12">
                     <FileText className="h-12 w-12 text-slate-300 mx-auto mb-4" />
                     <p className="text-slate-500 mb-4">No documents in this project yet</p>
-                    <button onClick={() => setShowUpload(true)}
-                      className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium inline-flex items-center gap-2">
-                      <Upload className="h-4 w-4" /> Upload First Document
-                    </button>
+                    {canWrite && (
+                      <button onClick={() => setShowUpload(true)}
+                        className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-medium inline-flex items-center gap-2">
+                        <Upload className="h-4 w-4" /> Upload First Document
+                      </button>
+                    )}
                   </div>
                 ) : null}
 
@@ -554,10 +565,12 @@ export default function ProjectDetailPage() {
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-slate-700">Team Members</h3>
-            <button onClick={openAddMember}
-              className="px-3 py-1.5 bg-primary-600 text-white text-xs font-medium rounded-lg hover:bg-primary-700 flex items-center gap-1">
-              <UserPlus className="h-3.5 w-3.5" /> Add Member
-            </button>
+            {isProjectAdmin && (
+              <button onClick={openAddMember}
+                className="px-3 py-1.5 bg-primary-600 text-white text-xs font-medium rounded-lg hover:bg-primary-700 flex items-center gap-1">
+                <UserPlus className="h-3.5 w-3.5" /> Add Member
+              </button>
+            )}
           </div>
           {members.length === 0 ? (
             <p className="text-sm text-slate-400 py-4 text-center">No members assigned yet</p>
@@ -579,29 +592,31 @@ export default function ProjectDetailPage() {
                           {m.roleName && <span className="text-[10px] text-primary-600 font-medium">{m.roleName}</span>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        {editingMemberId === m.userId ? (
-                          <>
-                            <button onClick={() => handleSavePerms(m.userId)}
-                              className="p-1.5 rounded-lg hover:bg-green-50 text-green-600 hover:text-green-700" title="Save permissions">
-                              <Check className="h-4 w-4" />
+                      {isProjectAdmin && (
+                        <div className="flex items-center gap-1">
+                          {editingMemberId === m.userId ? (
+                            <>
+                              <button onClick={() => handleSavePerms(m.userId)}
+                                className="p-1.5 rounded-lg hover:bg-green-50 text-green-600 hover:text-green-700" title="Save permissions">
+                                <Check className="h-4 w-4" />
+                              </button>
+                              <button onClick={() => setEditingMemberId(null)}
+                                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600" title="Cancel">
+                                <X className="h-4 w-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <button onClick={() => startEditPerms(m)}
+                              className="p-1.5 rounded-lg hover:bg-primary-50 text-slate-400 hover:text-primary-600" title="Edit permissions">
+                              <Pencil className="h-4 w-4" />
                             </button>
-                            <button onClick={() => setEditingMemberId(null)}
-                              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600" title="Cancel">
-                              <X className="h-4 w-4" />
-                            </button>
-                          </>
-                        ) : (
-                          <button onClick={() => startEditPerms(m)}
-                            className="p-1.5 rounded-lg hover:bg-primary-50 text-slate-400 hover:text-primary-600" title="Edit permissions">
-                            <Pencil className="h-4 w-4" />
+                          )}
+                          <button onClick={() => handleRemoveMember(m.userId)}
+                            className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600" title="Remove member">
+                            <UserMinus className="h-4 w-4" />
                           </button>
-                        )}
-                        <button onClick={() => handleRemoveMember(m.userId)}
-                          className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-600" title="Remove member">
-                          <UserMinus className="h-4 w-4" />
-                        </button>
-                      </div>
+                        </div>
+                      )}
                     </div>
                     {editingMemberId === m.userId ? (
                       <div className="mt-2 flex gap-1.5 flex-wrap">
