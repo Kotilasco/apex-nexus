@@ -59,6 +59,7 @@ public class EmailIngestionController {
                 .pollInterval(req.getPollInterval() != null ? req.getPollInterval() : 5)
                 .enabled(false)
                 .targetFolderId(req.getTargetFolderId())
+                .projectId(req.getProjectId())
                 .createdBy(userId)
                 .build();
         config = configRepository.save(config);
@@ -83,6 +84,7 @@ public class EmailIngestionController {
         if (req.getUseSsl() != null) config.setUseSsl(req.getUseSsl());
         if (req.getPollInterval() != null) config.setPollInterval(req.getPollInterval());
         if (req.getTargetFolderId() != null) config.setTargetFolderId(req.getTargetFolderId());
+        if (req.getProjectId() != null) config.setProjectId(req.getProjectId());
         config = configRepository.save(config);
         return ResponseEntity.ok(ApiResponse.ok("Config updated", toDto(config)));
     }
@@ -164,6 +166,7 @@ public class EmailIngestionController {
                 .pollInterval(c.getPollInterval())
                 .enabled(c.getEnabled())
                 .targetFolderId(c.getTargetFolderId())
+                .projectId(c.getProjectId())
                 .createdBy(c.getCreatedBy())
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())

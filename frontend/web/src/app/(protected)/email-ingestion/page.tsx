@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { emailIngestionApi } from '@/lib/api';
+import { emailIngestionApi, documentApi, projectApi } from '@/lib/api';
 import {
   Mail, Plus, Trash2, Power, PowerOff, RefreshCw, Play,
   Settings, Filter, ChevronDown, ChevronUp, X, Check, Pencil,
+  FolderOpen, ChevronRight, Building2,
 } from 'lucide-react';
 
 interface Rule {
@@ -31,9 +32,25 @@ interface Config {
   pollInterval: number;
   enabled: boolean;
   targetFolderId: string | null;
+  projectId: string | null;
   createdAt: string;
   updatedAt: string;
   rules: Rule[];
+}
+
+interface Folder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  projectId: string | null;
+  path: string;
+  depth: number;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  description?: string;
 }
 
 const RULE_TYPES = [
@@ -56,6 +73,7 @@ export default function EmailIngestionPage() {
   const [form, setForm] = useState({
     name: '', protocol: 'IMAP', imapHost: '', imapPort: 993, ewsUrl: '',
     username: '', password: '', folderName: 'INBOX', useSsl: true, pollInterval: 5,
+    targetFolderId: '' as string, projectId: '' as string,
   });
 
   // New rule form
@@ -67,7 +85,22 @@ export default function EmailIngestionPage() {
   const [editForm, setEditForm] = useState({
     name: '', protocol: 'IMAP', imapHost: '', imapPort: 993, ewsUrl: '',
     username: '', password: '', folderName: 'INBOX', useSsl: true, pollInterval: 5,
+    targetFolderId: '' as string, projectId: '' as string,
   });
+
+  // Folder picker
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folderBreadcrumbs, setFolderBreadcrumbs] = useState<Folder[]>([]);
+  const [folderLoading, setFolderLoading] = useState(false);
+  const [selectedFolderName, setSelectedFolderName] = useState('');
+  const [selectedProjectName, setSelectedProjectName] = useState('');
+  // For edit modal
+  const [editFolders, setEditFolders] = useState<Folder[]>([]);
+  const [editFolderBreadcrumbs, setEditFolderBreadcrumbs] = useState<Folder[]>([]);
+  const [editFolderLoading, setEditFolderLoading] = useState(false);
+  const [editSelectedFolderName, setEditSelectedFolderName] = useState('');
+  const [editSelectedProjectName, setEditSelectedProjectName] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,8 +109,86 @@ export default function EmailIngestionPage() {
       const data = res.data?.data ?? res.data;
       setConfigs(Array.isArray(data) ? data : []);
     } catch { /* silent */ }
+    try {
+      const res = await projectApi.list();
+      const data = res.data?.data ?? res.data;
+      setProjects(Array.isArray(data) ? data : []);
+    } catch { /* silent */ }
     setLoading(false);
   }, []);
+
+  const loadFolders = async (projectId: string | null, parentId: string | null, target: 'create' | 'edit') => {
+    const setFld = target === 'create' ? setFolders : setEditFolders;
+    const setLd = target === 'create' ? setFolderLoading : setEditFolderLoading;
+    setLd(true);
+    try {
+      let res;
+      if (projectId) {
+        res = await documentApi.getFoldersByProject(projectId, parentId || undefined);
+      } else {
+        res = await documentApi.getFolders(parentId || undefined);
+      }
+      const data = res.data?.data ?? res.data;
+      setFld(Array.isArray(data) ? data : []);
+    } catch { setFld([]); }
+    setLd(false);
+  };
+
+  const navigateFolder = (folder: Folder, target: 'create' | 'edit') => {
+    const setBc = target === 'create' ? setFolderBreadcrumbs : setEditFolderBreadcrumbs;
+    setBc(prev => [...prev, folder]);
+    const projId = target === 'create' ? form.projectId : editForm.projectId;
+    loadFolders(projId || null, folder.id, target);
+  };
+
+  const navigateBreadcrumb = (index: number, target: 'create' | 'edit') => {
+    const bc = target === 'create' ? folderBreadcrumbs : editFolderBreadcrumbs;
+    const setBc = target === 'create' ? setFolderBreadcrumbs : setEditFolderBreadcrumbs;
+    const projId = target === 'create' ? form.projectId : editForm.projectId;
+    if (index < 0) {
+      setBc([]);
+      loadFolders(projId || null, null, target);
+    } else {
+      const newBc = bc.slice(0, index + 1);
+      setBc(newBc);
+      loadFolders(projId || null, newBc[newBc.length - 1].id, target);
+    }
+  };
+
+  const selectFolder = (folder: Folder, target: 'create' | 'edit') => {
+    if (target === 'create') {
+      setForm(f => ({ ...f, targetFolderId: folder.id }));
+      setSelectedFolderName(folder.path || folder.name);
+    } else {
+      setEditForm(f => ({ ...f, targetFolderId: folder.id }));
+      setEditSelectedFolderName(folder.path || folder.name);
+    }
+  };
+
+  const clearFolder = (target: 'create' | 'edit') => {
+    if (target === 'create') {
+      setForm(f => ({ ...f, targetFolderId: '' }));
+      setSelectedFolderName('');
+    } else {
+      setEditForm(f => ({ ...f, targetFolderId: '' }));
+      setEditSelectedFolderName('');
+    }
+  };
+
+  const handleProjectChange = (projId: string, target: 'create' | 'edit') => {
+    if (target === 'create') {
+      setForm(f => ({ ...f, projectId: projId, targetFolderId: '' }));
+      setSelectedFolderName('');
+      setSelectedProjectName(projects.find(p => p.id === projId)?.name || '');
+      setFolderBreadcrumbs([]);
+    } else {
+      setEditForm(f => ({ ...f, projectId: projId, targetFolderId: '' }));
+      setEditSelectedFolderName('');
+      setEditSelectedProjectName(projects.find(p => p.id === projId)?.name || '');
+      setEditFolderBreadcrumbs([]);
+    }
+    loadFolders(projId || null, null, target);
+  };
 
   useEffect(() => { load(); }, [load]);
 
@@ -86,9 +197,16 @@ export default function EmailIngestionPage() {
     if (form.protocol === 'IMAP' && !form.imapHost) return;
     if (form.protocol === 'EWS' && !form.ewsUrl) return;
     try {
-      await emailIngestionApi.createConfig(form);
+      const payload: any = { ...form };
+      if (!payload.targetFolderId) delete payload.targetFolderId;
+      if (!payload.projectId) delete payload.projectId;
+      await emailIngestionApi.createConfig(payload);
       setShowCreate(false);
-      setForm({ name: '', protocol: 'IMAP', imapHost: '', imapPort: 993, ewsUrl: '', username: '', password: '', folderName: 'INBOX', useSsl: true, pollInterval: 5 });
+      setForm({ name: '', protocol: 'IMAP', imapHost: '', imapPort: 993, ewsUrl: '', username: '', password: '', folderName: 'INBOX', useSsl: true, pollInterval: 5, targetFolderId: '', projectId: '' });
+      setSelectedFolderName('');
+      setSelectedProjectName('');
+      setFolders([]);
+      setFolderBreadcrumbs([]);
       load();
     } catch { /* silent */ }
   };
@@ -142,7 +260,12 @@ export default function EmailIngestionPage() {
       ewsUrl: cfg.ewsUrl || '', username: cfg.username || '',
       password: '', folderName: cfg.folderName || 'INBOX',
       useSsl: cfg.useSsl ?? true, pollInterval: cfg.pollInterval || 5,
+      targetFolderId: cfg.targetFolderId || '', projectId: cfg.projectId || '',
     });
+    setEditSelectedProjectName(cfg.projectId ? (projects.find(p => p.id === cfg.projectId)?.name || '') : '');
+    setEditSelectedFolderName('');
+    setEditFolderBreadcrumbs([]);
+    loadFolders(cfg.projectId || null, null, 'edit');
   };
 
   const handleUpdateConfig = async () => {
@@ -152,7 +275,9 @@ export default function EmailIngestionPage() {
     if (editForm.protocol === 'EWS' && !editForm.ewsUrl) return;
     try {
       const payload: any = { ...editForm };
-      if (!payload.password) delete payload.password; // don't overwrite if blank
+      if (!payload.password) delete payload.password;
+      if (!payload.targetFolderId) delete payload.targetFolderId;
+      if (!payload.projectId) delete payload.projectId;
       await emailIngestionApi.updateConfig(editingConfig.id, payload);
       setEditingConfig(null);
       load();
@@ -192,7 +317,7 @@ export default function EmailIngestionPage() {
       {/* Create config modal */}
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4 space-y-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <Settings className="h-5 w-5 text-blue-600" /> New Email Connection
             </h2>
@@ -263,6 +388,62 @@ export default function EmailIngestionPage() {
                   <label htmlFor="ssl" className="text-sm text-slate-700">Use SSL/TLS</label>
                 </div>
               )}
+
+              {/* Destination: Project + Folder picker */}
+              <div className="col-span-2 border-t pt-3 mt-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                  <FolderOpen className="h-3.5 w-3.5" /> Destination Folder
+                </label>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-0.5">Project (optional)</label>
+                    <select
+                      value={form.projectId}
+                      onChange={e => handleProjectChange(e.target.value, 'create')}
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                    >
+                      <option value="">No project (root folders)</option>
+                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  {form.targetFolderId ? (
+                    <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                      <FolderOpen className="h-4 w-4 text-blue-600 shrink-0" />
+                      <span className="text-sm text-blue-800 truncate flex-1">{selectedFolderName || form.targetFolderId}</span>
+                      <button onClick={() => clearFolder('create')} className="text-blue-400 hover:text-blue-600"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => loadFolders(form.projectId || null, null, 'create')}
+                      className="w-full px-3 py-2 border border-dashed rounded-lg text-sm text-slate-500 hover:bg-slate-50 flex items-center gap-1 justify-center"
+                    >
+                      <FolderOpen className="h-4 w-4" /> Browse Folders
+                    </button>
+                  )}
+                  {folders.length > 0 && !form.targetFolderId && (
+                    <div className="border rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+                      {/* Breadcrumbs */}
+                      <div className="bg-slate-50 px-3 py-1.5 text-xs flex items-center gap-1 flex-wrap border-b">
+                        <button onClick={() => navigateBreadcrumb(-1, 'create')} className="text-blue-600 hover:underline">Root</button>
+                        {folderBreadcrumbs.map((bc, i) => (
+                          <span key={bc.id} className="flex items-center gap-1">
+                            <ChevronRight className="h-3 w-3 text-slate-400" />
+                            <button onClick={() => navigateBreadcrumb(i, 'create')} className="text-blue-600 hover:underline">{bc.name}</button>
+                          </span>
+                        ))}
+                      </div>
+                      {folders.map(f => (
+                        <div key={f.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 border-b last:border-b-0">
+                          <FolderOpen className="h-4 w-4 text-amber-500 shrink-0" />
+                          <button onClick={() => selectFolder(f, 'create')} className="text-sm text-slate-700 hover:text-blue-600 flex-1 text-left truncate">{f.name}</button>
+                          <button onClick={() => navigateFolder(f, 'create')} className="text-xs text-slate-400 hover:text-slate-600 p-1"><ChevronRight className="h-3 w-3" /></button>
+                        </div>
+                      ))}
+                      {folderLoading && <div className="text-center py-2 text-xs text-slate-400">Loading...</div>}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
@@ -279,7 +460,7 @@ export default function EmailIngestionPage() {
       {/* Edit config modal */}
       {editingConfig && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4 space-y-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <Pencil className="h-5 w-5 text-blue-600" /> Edit Connection
             </h2>
@@ -350,6 +531,61 @@ export default function EmailIngestionPage() {
                   <label htmlFor="editSsl" className="text-sm text-slate-700">Use SSL/TLS</label>
                 </div>
               )}
+
+              {/* Destination: Project + Folder picker */}
+              <div className="col-span-2 border-t pt-3 mt-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1">
+                  <FolderOpen className="h-3.5 w-3.5" /> Destination Folder
+                </label>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-0.5">Project (optional)</label>
+                    <select
+                      value={editForm.projectId}
+                      onChange={e => handleProjectChange(e.target.value, 'edit')}
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                    >
+                      <option value="">No project (root folders)</option>
+                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  {editForm.targetFolderId ? (
+                    <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                      <FolderOpen className="h-4 w-4 text-blue-600 shrink-0" />
+                      <span className="text-sm text-blue-800 truncate flex-1">{editSelectedFolderName || editForm.targetFolderId}</span>
+                      <button onClick={() => clearFolder('edit')} className="text-blue-400 hover:text-blue-600"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => loadFolders(editForm.projectId || null, null, 'edit')}
+                      className="w-full px-3 py-2 border border-dashed rounded-lg text-sm text-slate-500 hover:bg-slate-50 flex items-center gap-1 justify-center"
+                    >
+                      <FolderOpen className="h-4 w-4" /> Browse Folders
+                    </button>
+                  )}
+                  {editFolders.length > 0 && !editForm.targetFolderId && (
+                    <div className="border rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+                      <div className="bg-slate-50 px-3 py-1.5 text-xs flex items-center gap-1 flex-wrap border-b">
+                        <button onClick={() => navigateBreadcrumb(-1, 'edit')} className="text-blue-600 hover:underline">Root</button>
+                        {editFolderBreadcrumbs.map((bc, i) => (
+                          <span key={bc.id} className="flex items-center gap-1">
+                            <ChevronRight className="h-3 w-3 text-slate-400" />
+                            <button onClick={() => navigateBreadcrumb(i, 'edit')} className="text-blue-600 hover:underline">{bc.name}</button>
+                          </span>
+                        ))}
+                      </div>
+                      {editFolders.map(f => (
+                        <div key={f.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 border-b last:border-b-0">
+                          <FolderOpen className="h-4 w-4 text-amber-500 shrink-0" />
+                          <button onClick={() => selectFolder(f, 'edit')} className="text-sm text-slate-700 hover:text-blue-600 flex-1 text-left truncate">{f.name}</button>
+                          <button onClick={() => navigateFolder(f, 'edit')} className="text-xs text-slate-400 hover:text-slate-600 p-1"><ChevronRight className="h-3 w-3" /></button>
+                        </div>
+                      ))}
+                      {editFolderLoading && <div className="text-center py-2 text-xs text-slate-400">Loading...</div>}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
@@ -390,6 +626,8 @@ export default function EmailIngestionPage() {
                     <p className="text-xs text-slate-500">
                       <span className="inline-block bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-semibold mr-1">{cfg.protocol || 'IMAP'}</span>
                       {cfg.protocol === 'EWS' ? cfg.ewsUrl : `${cfg.imapHost}:${cfg.imapPort}`} &middot; {cfg.username} &middot; {cfg.folderName} &middot; Every {cfg.pollInterval}min
+                      {cfg.projectId && <span className="ml-1"> &middot; <Building2 className="h-3 w-3 inline" /> {projects.find(p => p.id === cfg.projectId)?.name || 'Project'}</span>}
+                      {cfg.targetFolderId && <span className="ml-1"> &middot; <FolderOpen className="h-3 w-3 inline text-amber-500" /> Folder set</span>}
                     </p>
                   </div>
                   {expandedConfig === cfg.id ? <ChevronUp className="h-4 w-4 text-slate-400 ml-2" /> : <ChevronDown className="h-4 w-4 text-slate-400 ml-2" />}

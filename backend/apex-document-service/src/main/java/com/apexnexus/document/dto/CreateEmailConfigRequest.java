@@ -17,4 +17,5 @@ public class CreateEmailConfigRequest {
     private Boolean useSsl;
     private Integer pollInterval;
     private UUID targetFolderId;
+    private UUID projectId;
 }

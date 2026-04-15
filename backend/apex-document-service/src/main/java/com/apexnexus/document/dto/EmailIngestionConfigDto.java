@@ -20,6 +20,7 @@ public class EmailIngestionConfigDto {
     private Integer pollInterval;
     private Boolean enabled;
     private UUID targetFolderId;
+    private UUID projectId;
     private UUID createdBy;
     private Instant createdAt;
     private Instant updatedAt;

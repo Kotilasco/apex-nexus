@@ -52,6 +52,9 @@ public class EmailIngestionConfig {
     @Column(name = "target_folder_id")
     private UUID targetFolderId;
 
+    @Column(name = "project_id")
+    private UUID projectId;
+
     @Column(name = "created_by")
     private UUID createdBy;
 

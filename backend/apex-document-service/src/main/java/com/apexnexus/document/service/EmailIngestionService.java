@@ -294,6 +294,7 @@ public class EmailIngestionService {
         Document doc = Document.builder()
                 .objectGuid(objectGuid)
                 .folderId(targetFolder)
+                .projectId(config.getProjectId())
                 .title("[Email] " + subject + " — " + fileName)
                 .description("Ingested from email via rule '" + rule.getRuleName() + "'. From: " + from)
                 .mimeType(mimeType)
