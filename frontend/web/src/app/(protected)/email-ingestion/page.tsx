@@ -5,7 +5,7 @@ import { emailIngestionApi, documentApi, projectApi } from '@/lib/api';
 import {
   Mail, Plus, Trash2, Power, PowerOff, RefreshCw, Play,
   Settings, Filter, ChevronDown, ChevronUp, X, Check, Pencil,
-  FolderOpen, ChevronRight, Building2,
+  FolderOpen, ChevronRight, Building2, FolderPlus,
 } from 'lucide-react';
 
 interface Rule {
@@ -95,12 +95,18 @@ export default function EmailIngestionPage() {
   const [folderLoading, setFolderLoading] = useState(false);
   const [selectedFolderName, setSelectedFolderName] = useState('');
   const [selectedProjectName, setSelectedProjectName] = useState('');
+  const [browsing, setBrowsing] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [creatingFolder, setCreatingFolder] = useState(false);
   // For edit modal
   const [editFolders, setEditFolders] = useState<Folder[]>([]);
   const [editFolderBreadcrumbs, setEditFolderBreadcrumbs] = useState<Folder[]>([]);
   const [editFolderLoading, setEditFolderLoading] = useState(false);
   const [editSelectedFolderName, setEditSelectedFolderName] = useState('');
   const [editSelectedProjectName, setEditSelectedProjectName] = useState('');
+  const [editBrowsing, setEditBrowsing] = useState(false);
+  const [editNewFolderName, setEditNewFolderName] = useState('');
+  const [editCreatingFolder, setEditCreatingFolder] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -120,6 +126,8 @@ export default function EmailIngestionPage() {
   const loadFolders = async (projectId: string | null, parentId: string | null, target: 'create' | 'edit') => {
     const setFld = target === 'create' ? setFolders : setEditFolders;
     const setLd = target === 'create' ? setFolderLoading : setEditFolderLoading;
+    const setBr = target === 'create' ? setBrowsing : setEditBrowsing;
+    setBr(true);
     setLd(true);
     try {
       let res;
@@ -132,6 +140,27 @@ export default function EmailIngestionPage() {
       setFld(Array.isArray(data) ? data : []);
     } catch { setFld([]); }
     setLd(false);
+  };
+
+  const createNewFolder = async (target: 'create' | 'edit') => {
+    const name = target === 'create' ? newFolderName : editNewFolderName;
+    const bc = target === 'create' ? folderBreadcrumbs : editFolderBreadcrumbs;
+    const projId = target === 'create' ? form.projectId : editForm.projectId;
+    const setCreating = target === 'create' ? setCreatingFolder : setEditCreatingFolder;
+    const setName = target === 'create' ? setNewFolderName : setEditNewFolderName;
+    if (!name.trim()) return;
+    setCreating(true);
+    try {
+      const parentId = bc.length > 0 ? bc[bc.length - 1].id : undefined;
+      await documentApi.createFolder({
+        name: name.trim(),
+        parentId,
+        projectId: projId || undefined,
+      });
+      setName('');
+      await loadFolders(projId || null, parentId || null, target);
+    } catch { /* silent */ }
+    setCreating(false);
   };
 
   const navigateFolder = (folder: Folder, target: 'create' | 'edit') => {
@@ -159,9 +188,11 @@ export default function EmailIngestionPage() {
     if (target === 'create') {
       setForm(f => ({ ...f, targetFolderId: folder.id }));
       setSelectedFolderName(folder.path || folder.name);
+      setBrowsing(false);
     } else {
       setEditForm(f => ({ ...f, targetFolderId: folder.id }));
       setEditSelectedFolderName(folder.path || folder.name);
+      setEditBrowsing(false);
     }
   };
 
@@ -169,9 +200,13 @@ export default function EmailIngestionPage() {
     if (target === 'create') {
       setForm(f => ({ ...f, targetFolderId: '' }));
       setSelectedFolderName('');
+      setFolders([]);
+      setBrowsing(false);
     } else {
       setEditForm(f => ({ ...f, targetFolderId: '' }));
       setEditSelectedFolderName('');
+      setEditFolders([]);
+      setEditBrowsing(false);
     }
   };
 
@@ -181,13 +216,18 @@ export default function EmailIngestionPage() {
       setSelectedFolderName('');
       setSelectedProjectName(projects.find(p => p.id === projId)?.name || '');
       setFolderBreadcrumbs([]);
+      setFolders([]);
+      setBrowsing(false);
+      setNewFolderName('');
     } else {
       setEditForm(f => ({ ...f, projectId: projId, targetFolderId: '' }));
       setEditSelectedFolderName('');
       setEditSelectedProjectName(projects.find(p => p.id === projId)?.name || '');
       setEditFolderBreadcrumbs([]);
+      setEditFolders([]);
+      setEditBrowsing(false);
+      setEditNewFolderName('');
     }
-    loadFolders(projId || null, null, target);
   };
 
   useEffect(() => { load(); }, [load]);
@@ -207,6 +247,8 @@ export default function EmailIngestionPage() {
       setSelectedProjectName('');
       setFolders([]);
       setFolderBreadcrumbs([]);
+      setBrowsing(false);
+      setNewFolderName('');
       load();
     } catch { /* silent */ }
   };
@@ -265,7 +307,9 @@ export default function EmailIngestionPage() {
     setEditSelectedProjectName(cfg.projectId ? (projects.find(p => p.id === cfg.projectId)?.name || '') : '');
     setEditSelectedFolderName('');
     setEditFolderBreadcrumbs([]);
-    loadFolders(cfg.projectId || null, null, 'edit');
+    setEditFolders([]);
+    setEditBrowsing(false);
+    setEditNewFolderName('');
   };
 
   const handleUpdateConfig = async () => {
@@ -420,8 +464,8 @@ export default function EmailIngestionPage() {
                       <FolderOpen className="h-4 w-4" /> Browse Folders
                     </button>
                   )}
-                  {folders.length > 0 && !form.targetFolderId && (
-                    <div className="border rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+                  {browsing && !form.targetFolderId && (
+                    <div className="border rounded-lg overflow-hidden">
                       {/* Breadcrumbs */}
                       <div className="bg-slate-50 px-3 py-1.5 text-xs flex items-center gap-1 flex-wrap border-b">
                         <button onClick={() => navigateBreadcrumb(-1, 'create')} className="text-blue-600 hover:underline">Root</button>
@@ -432,14 +476,39 @@ export default function EmailIngestionPage() {
                           </span>
                         ))}
                       </div>
-                      {folders.map(f => (
-                        <div key={f.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 border-b last:border-b-0">
-                          <FolderOpen className="h-4 w-4 text-amber-500 shrink-0" />
-                          <button onClick={() => selectFolder(f, 'create')} className="text-sm text-slate-700 hover:text-blue-600 flex-1 text-left truncate">{f.name}</button>
-                          <button onClick={() => navigateFolder(f, 'create')} className="text-xs text-slate-400 hover:text-slate-600 p-1"><ChevronRight className="h-3 w-3" /></button>
-                        </div>
-                      ))}
-                      {folderLoading && <div className="text-center py-2 text-xs text-slate-400">Loading...</div>}
+                      <div className="max-h-48 overflow-y-auto">
+                        {folderLoading ? (
+                          <div className="text-center py-4 text-xs text-slate-400">Loading folders...</div>
+                        ) : folders.length === 0 ? (
+                          <div className="text-center py-4 text-xs text-slate-400">No folders here. Create one below.</div>
+                        ) : (
+                          folders.map(f => (
+                            <div key={f.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 border-b last:border-b-0">
+                              <FolderOpen className="h-4 w-4 text-amber-500 shrink-0" />
+                              <button onClick={() => selectFolder(f, 'create')} className="text-sm text-slate-700 hover:text-blue-600 flex-1 text-left truncate">{f.name}</button>
+                              <button onClick={() => navigateFolder(f, 'create')} className="text-xs text-slate-400 hover:text-slate-600 p-1"><ChevronRight className="h-3 w-3" /></button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      {/* Create new folder */}
+                      <div className="border-t bg-slate-50 px-3 py-2 flex items-center gap-2">
+                        <FolderPlus className="h-4 w-4 text-slate-400 shrink-0" />
+                        <input
+                          value={newFolderName}
+                          onChange={e => setNewFolderName(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && createNewFolder('create')}
+                          className="flex-1 px-2 py-1 border rounded text-sm"
+                          placeholder="New folder name..."
+                        />
+                        <button
+                          onClick={() => createNewFolder('create')}
+                          disabled={!newFolderName.trim() || creatingFolder}
+                          className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {creatingFolder ? '...' : 'Create'}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -563,8 +632,8 @@ export default function EmailIngestionPage() {
                       <FolderOpen className="h-4 w-4" /> Browse Folders
                     </button>
                   )}
-                  {editFolders.length > 0 && !editForm.targetFolderId && (
-                    <div className="border rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+                  {editBrowsing && !editForm.targetFolderId && (
+                    <div className="border rounded-lg overflow-hidden">
                       <div className="bg-slate-50 px-3 py-1.5 text-xs flex items-center gap-1 flex-wrap border-b">
                         <button onClick={() => navigateBreadcrumb(-1, 'edit')} className="text-blue-600 hover:underline">Root</button>
                         {editFolderBreadcrumbs.map((bc, i) => (
@@ -574,14 +643,39 @@ export default function EmailIngestionPage() {
                           </span>
                         ))}
                       </div>
-                      {editFolders.map(f => (
-                        <div key={f.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 border-b last:border-b-0">
-                          <FolderOpen className="h-4 w-4 text-amber-500 shrink-0" />
-                          <button onClick={() => selectFolder(f, 'edit')} className="text-sm text-slate-700 hover:text-blue-600 flex-1 text-left truncate">{f.name}</button>
-                          <button onClick={() => navigateFolder(f, 'edit')} className="text-xs text-slate-400 hover:text-slate-600 p-1"><ChevronRight className="h-3 w-3" /></button>
-                        </div>
-                      ))}
-                      {editFolderLoading && <div className="text-center py-2 text-xs text-slate-400">Loading...</div>}
+                      <div className="max-h-48 overflow-y-auto">
+                        {editFolderLoading ? (
+                          <div className="text-center py-4 text-xs text-slate-400">Loading folders...</div>
+                        ) : editFolders.length === 0 ? (
+                          <div className="text-center py-4 text-xs text-slate-400">No folders here. Create one below.</div>
+                        ) : (
+                          editFolders.map(f => (
+                            <div key={f.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 border-b last:border-b-0">
+                              <FolderOpen className="h-4 w-4 text-amber-500 shrink-0" />
+                              <button onClick={() => selectFolder(f, 'edit')} className="text-sm text-slate-700 hover:text-blue-600 flex-1 text-left truncate">{f.name}</button>
+                              <button onClick={() => navigateFolder(f, 'edit')} className="text-xs text-slate-400 hover:text-slate-600 p-1"><ChevronRight className="h-3 w-3" /></button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      {/* Create new folder */}
+                      <div className="border-t bg-slate-50 px-3 py-2 flex items-center gap-2">
+                        <FolderPlus className="h-4 w-4 text-slate-400 shrink-0" />
+                        <input
+                          value={editNewFolderName}
+                          onChange={e => setEditNewFolderName(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && createNewFolder('edit')}
+                          className="flex-1 px-2 py-1 border rounded text-sm"
+                          placeholder="New folder name..."
+                        />
+                        <button
+                          onClick={() => createNewFolder('edit')}
+                          disabled={!editNewFolderName.trim() || editCreatingFolder}
+                          className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {editCreatingFolder ? '...' : 'Create'}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
