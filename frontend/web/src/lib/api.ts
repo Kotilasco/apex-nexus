@@ -1,7 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9600/api',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -101,6 +101,7 @@ export const documentApi = {
   download: (id: string) =>
     api.get(`/documents/${id}/download`, { responseType: 'blob' }),
   getContent: (id: string) => api.get(`/documents/${id}/content`),
+  getRedactedContent: (id: string) => api.get(`/documents/${id}/content/redacted`),
   updateContent: (id: string, content: string) =>
     api.put(`/documents/${id}/content`, { content }),
   delete: (id: string) => api.delete(`/documents/${id}`),
@@ -116,6 +117,7 @@ export const documentApi = {
   compareVersions: (id: string, v1: number, v2: number) =>
     api.get(`/documents/${id}/versions/${v1}/compare/${v2}`),
   cancelCheckout: (id: string) => api.post(`/documents/${id}/cancel-checkout`),
+  myCheckouts: () => api.get('/documents/my-checkouts'),
   getVersions: (id: string) => api.get(`/documents/${id}/versions`),
   downloadVersion: (id: string, version: number) =>
     api.get(`/documents/${id}/versions/${version}/download`, { responseType: 'blob' }),
@@ -455,4 +457,18 @@ export const aiApi = {
   generateWorkflow: (prompt: string) =>
     api.post('/ai/generate-workflow', { prompt }),
   getStatus: () => api.get('/ai/status'),
+};
+
+/* ── Email Ingestion ── */
+export const emailIngestionApi = {
+  getConfigs: () => api.get('/email-ingestion/configs'),
+  getConfig: (id: string) => api.get(`/email-ingestion/configs/${id}`),
+  createConfig: (data: any) => api.post('/email-ingestion/configs', data),
+  updateConfig: (id: string, data: any) => api.put(`/email-ingestion/configs/${id}`, data),
+  toggleConfig: (id: string) => api.patch(`/email-ingestion/configs/${id}/toggle`),
+  deleteConfig: (id: string) => api.delete(`/email-ingestion/configs/${id}`),
+  addRule: (configId: string, data: any) => api.post(`/email-ingestion/configs/${configId}/rules`, data),
+  toggleRule: (ruleId: string) => api.patch(`/email-ingestion/rules/${ruleId}/toggle`),
+  deleteRule: (ruleId: string) => api.delete(`/email-ingestion/rules/${ruleId}`),
+  pollNow: (configId: string) => api.post(`/email-ingestion/configs/${configId}/poll`),
 };

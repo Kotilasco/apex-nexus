@@ -52,6 +52,10 @@ export interface Document {
   retentionPeriodYears?: number;
   retentionExpiry?: string | null;
   privacyRedactionEnabled?: boolean;
+  piiDetected?: boolean;
+  piiSeverity?: string;
+  piiTypes?: string;
+  piiScanDate?: string;
   classificationLabel?: string;
   m365Link?: string;
   docusignEnvelopeId?: string;

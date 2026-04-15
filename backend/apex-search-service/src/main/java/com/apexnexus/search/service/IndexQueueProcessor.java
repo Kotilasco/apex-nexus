@@ -29,6 +29,7 @@ public class IndexQueueProcessor {
     private final SearchService searchService;
     private final ContentExtractorService contentExtractor;
     private final ClassificationService classificationService;
+    private final GdprScannerService gdprScannerService;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
 
@@ -179,6 +180,50 @@ public class IndexQueueProcessor {
                     }
                 } else {
                     log.debug("SAP ERP Connector plugin is not active — skipping SAP document numbering");
+                }
+
+                // Store extracted text content in PostgreSQL for redaction previews
+                String docIdForContent = (String) document.get("documentId");
+                if (docIdForContent != null) {
+                    try {
+                        jdbcTemplate.update(
+                            "UPDATE documents SET extracted_content = ? WHERE id = ?::uuid",
+                            result.getText(), docIdForContent);
+                    } catch (Exception ex) {
+                        log.warn("Failed to save extracted content for doc {}: {}", docIdForContent, ex.getMessage());
+                    }
+                }
+
+                // Automatic GDPR PII scan on every uploaded document
+                String docId4Pii = (String) document.get("documentId");
+                if (docId4Pii != null) {
+                    try {
+                        GdprScannerService.GdprScanResult piiResult = gdprScannerService.scan(result.getText(), docId4Pii);
+                        document.put("piiDetected", piiResult.isPiiFound());
+                        document.put("piiSeverity", piiResult.getSeverity().name());
+
+                        if (piiResult.isPiiFound()) {
+                            String piiTypes = piiResult.getFindings().stream()
+                                    .map(GdprScannerService.PiiFinding::getType)
+                                    .distinct()
+                                    .reduce((a, b) -> a + "," + b)
+                                    .orElse("");
+                            document.put("piiTypes", piiTypes);
+
+                            jdbcTemplate.update(
+                                "UPDATE documents SET pii_detected = TRUE, pii_severity = ?, pii_types = ?, pii_scan_date = NOW() WHERE id = ?::uuid",
+                                piiResult.getSeverity().name(), piiTypes, docId4Pii);
+                            log.warn("PII DETECTED in document '{}': severity={}, types=[{}], count={}",
+                                    fileName, piiResult.getSeverity(), piiTypes, piiResult.getTotalPiiCount());
+                        } else {
+                            jdbcTemplate.update(
+                                "UPDATE documents SET pii_detected = FALSE, pii_severity = 'NONE', pii_scan_date = NOW() WHERE id = ?::uuid",
+                                docId4Pii);
+                            log.info("GDPR scan clean for document '{}' — no PII found", fileName);
+                        }
+                    } catch (Exception ex) {
+                        log.warn("GDPR PII scan failed for doc {}: {}", docId4Pii, ex.getMessage());
+                    }
                 }
 
                 // Store extraction metadata

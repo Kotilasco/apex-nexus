@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, FolderOpen, GitBranch, Search,
   Shield, ClipboardList, Users, Settings, ChevronLeft, ChevronRight, Database, Bell, ShieldCheck, BarChart3,
-  Paintbrush, Plug, Globe, Factory, Layers, FolderKanban,
+  Paintbrush, Plug, Globe, Factory, Layers, FolderKanban, Mail,
 } from 'lucide-react';
 
 const navItems = [
@@ -20,6 +20,7 @@ const navItems = [
   { href: '/marketplace', label: 'Marketplace', icon: Plug },
   { href: '/industry', label: 'Industry', icon: Factory },
   { href: '/sap', label: 'SAP Integration', icon: Layers },
+  { href: '/email-ingestion', label: 'Email Ingestion', icon: Mail },
   { href: '/trust-center', label: 'Trust Center', icon: ShieldCheck },
   { href: '/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/audit', label: 'Audit Log', icon: ClipboardList },

@@ -393,6 +393,12 @@ export default function ProjectDetailPage() {
                   {project.subProjectCount} sub-project{project.subProjectCount !== 1 ? 's' : ''}
                 </span>
               )}
+              {/* Permission role badge */}
+              <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                isProjectAdmin ? 'bg-green-100 text-green-700' : canWrite ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-100 text-slate-600'
+              }`}>
+                {isProjectAdmin ? 'Admin' : canWrite ? 'Editor' : 'Read-only'}
+              </span>
             </div>
             {project.description && (
               <p className="text-sm text-slate-500 mt-1 ml-10">{project.description}</p>

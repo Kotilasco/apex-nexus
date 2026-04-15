@@ -4,6 +4,7 @@ import com.apexnexus.common.dto.ApiResponse;
 import com.apexnexus.common.dto.PagedResponse;
 import com.apexnexus.document.dto.*;
 import com.apexnexus.document.service.DocumentService;
+import com.apexnexus.document.service.PiiRedactionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,6 +25,7 @@ import java.util.UUID;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final PiiRedactionService piiRedactionService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<DocumentDto>> createDocument(
@@ -101,10 +103,16 @@ public class DocumentController {
         byte[] data = documentService.downloadDocument(id, userId);
         DocumentDto doc = documentService.getDocument(id);
 
-        return ResponseEntity.ok()
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + doc.getTitle() + "." + doc.getFileExtension() + "\"")
-                .body(data);
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + doc.getTitle() + "." + doc.getFileExtension() + "\"");
+
+        if (Boolean.TRUE.equals(doc.getPiiDetected())) {
+            response.header("X-PII-Warning", "true")
+                    .header("X-PII-Severity", doc.getPiiSeverity() != null ? doc.getPiiSeverity() : "UNKNOWN");
+        }
+
+        return response.body(data);
     }
 
     // --- Check-out / Check-in ---
@@ -138,6 +146,12 @@ public class DocumentController {
     public ResponseEntity<ApiResponse<DocumentDto>> cancelCheckOut(@PathVariable UUID id, Authentication auth) {
         UUID userId = (UUID) auth.getPrincipal();
         return ResponseEntity.ok(ApiResponse.ok(documentService.cancelCheckOut(id, userId)));
+    }
+
+    @GetMapping("/my-checkouts")
+    public ResponseEntity<ApiResponse<List<DocumentDto>>> getMyCheckouts(Authentication auth) {
+        UUID userId = (UUID) auth.getPrincipal();
+        return ResponseEntity.ok(ApiResponse.ok(documentService.getMyCheckouts(userId)));
     }
 
     // --- Version History ---
@@ -250,6 +264,34 @@ public class DocumentController {
         return ResponseEntity.ok(ApiResponse.ok(Map.of("content", text)));
     }
 
+    @GetMapping("/{id}/content/redacted")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getRedactedContent(@PathVariable UUID id) {
+        DocumentDto doc = documentService.getDocument(id);
+        String extractedContent = documentService.getExtractedContent(id);
+
+        // Fall back to raw file content for text files if extracted content not available
+        if ((extractedContent == null || extractedContent.isBlank()) && doc.getMimeType() != null
+                && (doc.getMimeType().startsWith("text/") || "application/json".equals(doc.getMimeType()))) {
+            try {
+                extractedContent = documentService.getRawTextContent(id);
+            } catch (Exception ignored) {}
+        }
+
+        if (extractedContent == null || extractedContent.isBlank()) {
+            return ResponseEntity.ok(ApiResponse.ok(Map.of(
+                    "content", "Redacted preview not available — content could not be extracted from this file type.",
+                    "redacted", false
+            )));
+        }
+        String redacted = piiRedactionService.redact(extractedContent);
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+                "content", redacted,
+                "redacted", true,
+                "piiSeverity", doc.getPiiSeverity() != null ? doc.getPiiSeverity() : "NONE",
+                "piiTypes", doc.getPiiTypes() != null ? doc.getPiiTypes() : ""
+        )));
+    }
+
     @PutMapping("/{id}/content")
     public ResponseEntity<ApiResponse<DocumentDto>> updateTextContent(
             @PathVariable UUID id,
@@ -285,6 +327,19 @@ public class DocumentController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + doc.getTitle() + "." + doc.getFileExtension() + "\"")
                 .header(HttpHeaders.CACHE_CONTROL, "private, max-age=300")
                 .body(data);
+    }
+
+    @GetMapping("/{id}/pii-status")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getPiiStatus(@PathVariable UUID id) {
+        DocumentDto doc = documentService.getDocument(id);
+        Map<String, Object> piiInfo = Map.of(
+                "piiDetected", Boolean.TRUE.equals(doc.getPiiDetected()),
+                "piiSeverity", doc.getPiiSeverity() != null ? doc.getPiiSeverity() : "NONE",
+                "piiTypes", doc.getPiiTypes() != null ? doc.getPiiTypes() : "",
+                "piiScanDate", doc.getPiiScanDate() != null ? doc.getPiiScanDate().toString() : "",
+                "privacyRedactionEnabled", Boolean.TRUE.equals(doc.getPrivacyRedactionEnabled())
+        );
+        return ResponseEntity.ok(ApiResponse.ok(piiInfo));
     }
 
     private <T> PagedResponse<T> toPagedResponse(Page<T> page) {

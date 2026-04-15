@@ -42,7 +42,7 @@ spring:
         - id: document-service
           uri: http://${DOCUMENT_SERVICE_HOST:localhost}:${DOCUMENT_SERVICE_PORT:8082}
           predicates:
-            - Path=/api/documents/**, /api/folders/**, /api/notes/**
+            - Path=/api/documents/**, /api/folders/**, /api/notes/**, /api/email-ingestion/**
           filters:
             - StripPrefix=1
             - name: RequestSize

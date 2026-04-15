@@ -40,6 +40,10 @@ public class DocumentDto {
     private Boolean legalHold;
     private String legalHoldReason;
     private Boolean privacyRedactionEnabled;
+    private Boolean piiDetected;
+    private String piiSeverity;
+    private String piiTypes;
+    private Instant piiScanDate;
     private String classificationLabel;
     private String m365Link;
     private String docusignEnvelopeId;

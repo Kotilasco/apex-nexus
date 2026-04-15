@@ -41,7 +41,7 @@ services:
     container_name: apex-redis
     command: redis-server --requirepass ${REDIS_PASSWORD:-dev_redis_password} --appendonly yes
     ports:
-      - "6579:6379"
+      - "6479:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -357,15 +357,15 @@ services:
       context: ./frontend/web
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:9500/api
+        - NEXT_PUBLIC_API_URL=http://localhost:9600/api
     container_name: apex-web
     profiles:
       - frontend
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:9500/api
-      - NEXT_PUBLIC_WS_URL=ws://localhost:9500/ws
+      - NEXT_PUBLIC_API_URL=http://localhost:9600/api
+      - NEXT_PUBLIC_WS_URL=ws://localhost:9600/ws
     depends_on:
       - apex-gateway
     networks:
@@ -397,8 +397,8 @@ services:
     image: mailhog/mailhog:latest
     container_name: apex-mailhog
     ports:
-      - "1025:1025"
-      - "8525:8025"
+      - "1125:1025"
+      - "8625:8025"
     networks:
       - apex-network
 

@@ -100,6 +100,22 @@ public class Document {
     @Builder.Default
     private Boolean privacyRedactionEnabled = false;
 
+    @Column(name = "pii_detected")
+    @Builder.Default
+    private Boolean piiDetected = false;
+
+    @Column(name = "pii_severity", length = 20)
+    private String piiSeverity;
+
+    @Column(name = "pii_types", columnDefinition = "TEXT")
+    private String piiTypes;
+
+    @Column(name = "pii_scan_date")
+    private Instant piiScanDate;
+
+    @Column(name = "extracted_content", columnDefinition = "TEXT")
+    private String extractedContent;
+
     @Column(name = "classification_label", length = 100)
     private String classificationLabel;
 

@@ -38,7 +38,10 @@ public class WebDavTokenFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith("/webdav/");
+        String uri = request.getRequestURI();
+        String method = request.getMethod().toUpperCase();
+        // Skip non-WebDAV paths, and allow OPTIONS/HEAD without auth (Word discovery)
+        return !uri.startsWith("/webdav/") || "OPTIONS".equals(method) || "HEAD".equals(method);
     }
 
     @Override
@@ -46,31 +49,36 @@ public class WebDavTokenFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
+        String authMethod = "none";
+
         // 1. Try access_token query parameter
         String token = request.getParameter("access_token");
+        if (token != null && !token.isBlank()) authMethod = "query_param";
 
         // 2. Try cookie
         if (token == null || token.isBlank()) {
             token = extractFromCookie(request);
+            if (token != null && !token.isBlank()) authMethod = "cookie";
         }
 
         // 3. Try HTTP Basic auth (password field = access_token)
         if (token == null || token.isBlank()) {
             token = extractFromBasicAuth(request);
+            if (token != null && !token.isBlank()) authMethod = "basic_auth";
         }
 
+        log.info("[WebDAV] {} {} auth={}", request.getMethod(), request.getRequestURI(), authMethod);
+
         if (token == null || token.isBlank()) {
-            log.debug("[WebDAV] No credentials on {} {}", request.getMethod(), request.getRequestURI());
-            response.setHeader("WWW-Authenticate", "Basic realm=\"Apex Nexus WebDAV\"");
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Authentication required");
+            log.warn("[WebDAV] No credentials on {} {}", request.getMethod(), request.getRequestURI());
+            sendUnauthorized(response, "Authentication required");
             return;
         }
 
         Optional<WopiAccessToken> validated = wopiTokenService.validateToken(token);
         if (validated.isEmpty()) {
             log.warn("[WebDAV] Invalid or expired token on {} {}", request.getMethod(), request.getRequestURI());
-            response.setHeader("WWW-Authenticate", "Basic realm=\"Apex Nexus WebDAV\"");
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid or expired token");
+            sendUnauthorized(response, "Invalid or expired token");
             return;
         }
 
@@ -119,5 +127,17 @@ public class WebDavTokenFilter extends OncePerRequestFilter {
             log.debug("[WebDAV] Invalid Basic auth header");
         }
         return null;
+    }
+
+    /**
+     * Send 401 directly without triggering Tomcat's error page dispatch.
+     * Error page dispatch can convert 401→400 for non-standard HTTP methods (LOCK, PROPFIND).
+     */
+    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setHeader("WWW-Authenticate", "Basic realm=\"Apex Nexus WebDAV\"");
+        response.setContentType("text/plain");
+        response.getWriter().write(message);
+        response.getWriter().flush();
     }
 }

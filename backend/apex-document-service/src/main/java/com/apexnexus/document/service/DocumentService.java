@@ -182,6 +182,11 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
+    public List<DocumentDto> getMyCheckouts(UUID userId) {
+        return documentRepository.findCheckedOutByUser(userId).stream().map(this::mapToDto).toList();
+    }
+
+    @Transactional(readOnly = true)
     public Page<DocumentDto> getDocumentsByProjectAndFolder(UUID projectId, UUID folderId, Pageable pageable) {
         return documentRepository.findByProjectIdAndFolderId(projectId, folderId, pageable).map(this::mapToDto);
     }
@@ -288,6 +293,17 @@ public class DocumentService {
         if (!mime.startsWith("text/") && !mime.equals("application/json")) {
             throw new BusinessException("Only text-based documents can be read as text");
         }
+        byte[] data = storageService.retrieveFile(doc.getStorageKey());
+        return new String(data, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    public String getExtractedContent(UUID documentId) {
+        Document doc = findDocumentOrThrow(documentId);
+        return doc.getExtractedContent();
+    }
+
+    public String getRawTextContent(UUID documentId) throws Exception {
+        Document doc = findDocumentOrThrow(documentId);
         byte[] data = storageService.retrieveFile(doc.getStorageKey());
         return new String(data, java.nio.charset.StandardCharsets.UTF_8);
     }
@@ -1066,6 +1082,12 @@ public class DocumentService {
     }
 
     private DocumentDto mapToDto(Document doc) {
+        // Resolve author name
+        String authorName = resolveUserName(doc.getAuthorId());
+        // Resolve checked-out-by name if applicable
+        String checkedOutByName = (doc.getIsCheckedOut() != null && doc.getIsCheckedOut() && doc.getCheckedOutBy() != null)
+                ? resolveUserName(doc.getCheckedOutBy()) : null;
+
         return DocumentDto.builder()
                 .id(doc.getId())
                 .objectGuid(doc.getObjectGuid())
@@ -1079,9 +1101,11 @@ public class DocumentService {
                 .sha256Hash(doc.getSha256Hash())
                 .fileSizeBytes(doc.getFileSizeBytes())
                 .authorId(doc.getAuthorId())
+                .authorName(authorName)
                 .status(doc.getStatus())
                 .isCheckedOut(doc.getIsCheckedOut())
                 .checkedOutBy(doc.getCheckedOutBy())
+                .checkedOutByName(checkedOutByName)
                 .checkedOutAt(doc.getCheckedOutAt())
                 .retentionStartDate(doc.getRetentionStartDate())
                 .retentionPeriodYears(doc.getRetentionPeriodYears())
@@ -1089,6 +1113,10 @@ public class DocumentService {
                 .legalHold(doc.getLegalHold())
                 .legalHoldReason(doc.getLegalHoldReason())
                 .privacyRedactionEnabled(doc.getPrivacyRedactionEnabled())
+                .piiDetected(doc.getPiiDetected())
+                .piiSeverity(doc.getPiiSeverity())
+                .piiTypes(doc.getPiiTypes())
+                .piiScanDate(doc.getPiiScanDate())
                 .classificationLabel(doc.getClassificationLabel())
                 .m365Link(doc.getM365Link())
                 .docusignEnvelopeId(doc.getDocusignEnvelopeId())
@@ -1128,18 +1156,23 @@ public class DocumentService {
                 .build();
     }
 
+    private String resolveUserName(UUID userId) {
+        if (userId == null) return null;
+        try {
+            String name = jdbcTemplate.queryForObject(
+                    "SELECT COALESCE(first_name || ' ' || last_name, username) FROM users WHERE id = ?",
+                    String.class, userId);
+            return name != null ? name : "Unknown";
+        } catch (Exception e) {
+            return "Unknown";
+        }
+    }
+
     private Map<UUID, String> resolveUserNames(Set<UUID> userIds) {
         if (userIds.isEmpty()) return Collections.emptyMap();
         Map<UUID, String> result = new HashMap<>();
         for (UUID uid : userIds) {
-            try {
-                String name = jdbcTemplate.queryForObject(
-                        "SELECT COALESCE(first_name || ' ' || last_name, username) FROM users WHERE id = ?",
-                        String.class, uid);
-                result.put(uid, name != null ? name : "Unknown");
-            } catch (Exception e) {
-                result.put(uid, "Unknown");
-            }
+            result.put(uid, resolveUserName(uid));
         }
         return result;
     }

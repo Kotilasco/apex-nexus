@@ -10,13 +10,16 @@ import { formatBytes, formatDate, getFileIcon } from '@/lib/utils';
 import {
   Upload, FolderPlus, ChevronRight, Home, Download, Lock,
   Unlock, Trash2, FileText, StickyNote, MoreVertical, Eye, Bot, Shield, ExternalLink,
-  Edit3, Heart, UploadCloud, AlertTriangle, GitBranch, Send, Loader2, Save, X, PenTool, Search, FolderInput,
+  Edit3, Heart, UploadCloud, AlertTriangle, GitBranch, Send, Loader2, Save, X, PenTool, Search, FolderInput, Clock, User,
 } from 'lucide-react';
 import UploadModal from '@/components/documents/UploadModal';
 import NotesPanel from '@/components/documents/NotesPanel';
 import VersionsPanel from '@/components/documents/VersionsPanel';
 import DocumentRetentionPanel from '@/components/documents/DocumentRetentionPanel';
 import SignaturePanel from '@/components/documents/SignaturePanel';
+import AppDialog from '@/components/ui/AppDialog';
+import type { DialogVariant } from '@/components/ui/AppDialog';
+import { useAuthStore } from '@/lib/auth-store';
 import dynamic from 'next/dynamic';
 
 const DocxViewer = dynamic(() => import('@/components/documents/DocxViewer'), { ssr: false });
@@ -24,6 +27,7 @@ const DocxViewer = dynamic(() => import('@/components/documents/DocxViewer'), { 
 export default function DocumentsPage() {
   const searchParams = useSearchParams();
   const { activeProject } = useProjectStore();
+  const { user: currentUser } = useAuthStore();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [currentFolder, setCurrentFolder] = useState<string | undefined>();
@@ -51,6 +55,29 @@ export default function DocumentsPage() {
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // ── App Dialog (replaces browser alert/confirm) ──
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogProps, setDialogProps] = useState<{ title: string; message: string; variant: DialogVariant; onConfirm?: () => void; confirmLabel?: string; cancelLabel?: string; destructive?: boolean }>({ title: '', message: '', variant: 'info' });
+
+  const showDialog = useCallback((title: string, message: string, variant: DialogVariant = 'info', opts?: { onConfirm?: () => void; confirmLabel?: string; cancelLabel?: string; destructive?: boolean }) => {
+    setDialogProps({ title, message, variant, ...opts });
+    setDialogOpen(true);
+  }, []);
+
+  // ── My Checkouts view ──
+  const [viewMode, setViewMode] = useState<'browse' | 'checkouts'>('browse');
+  const [myCheckouts, setMyCheckouts] = useState<Document[]>([]);
+  const [checkoutsLoading, setCheckoutsLoading] = useState(false);
+
+  const loadMyCheckouts = useCallback(async () => {
+    setCheckoutsLoading(true);
+    try {
+      const res = await documentApi.myCheckouts();
+      setMyCheckouts(res.data?.data ?? res.data ?? []);
+    } catch { setMyCheckouts([]); }
+    setCheckoutsLoading(false);
+  }, []);
+
   // Pre-check warning modal state
   const [preCheckResult, setPreCheckResult] = useState<VersionPreCheckResult | null>(null);
   const [pendingCheckinFile, setPendingCheckinFile] = useState<File | null>(null);
@@ -67,6 +94,8 @@ export default function DocumentsPage() {
 
   // Text editing state
   const [textContent, setTextContent] = useState<string | null>(null);
+  const [redactedContent, setRedactedContent] = useState<string | null>(null);
+  const [showOriginal, setShowOriginal] = useState(false);
   const [isTextEditing, setIsTextEditing] = useState(false);
   const [editedContent, setEditedContent] = useState('');
   const [savingContent, setSavingContent] = useState(false);
@@ -142,12 +171,13 @@ export default function DocumentsPage() {
       const tokenData = tokenRes.data?.data ?? tokenRes.data;
       const title = selectedDoc?.title || 'document';
       const filename = encodeURIComponent(title.toLowerCase().endsWith(mapping.ext) ? title : title + mapping.ext);
-      const webdavUrl = `${window.location.protocol}//${window.location.hostname}:8200/api/webdav/documents/${docId}/${filename}?access_token=${tokenData.accessToken}`;
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || `${window.location.protocol}//${window.location.hostname}:9600/api`;
+      const webdavUrl = `${apiBase}/webdav/documents/${docId}/${filename}?access_token=${tokenData.accessToken}`;
       const officeUrl = `${mapping.protocol}:ofe|u|${webdavUrl}`;
       setWordUrl(officeUrl);
     } catch (e) {
       console.warn(`[Edit] Failed to generate ${mapping.label} URL:`, e);
-      alert(`Lock acquired but could not generate ${mapping.label} URL. Use Download instead.`);
+      showDialog('Link Generation Failed', `Lock acquired but could not generate ${mapping.label} URL. Use Download instead.`, 'warning');
     }
   };
 
@@ -169,24 +199,29 @@ export default function DocumentsPage() {
       const status = err?.response?.status;
       const msg = err?.response?.data?.message || 'Failed to acquire lock';
       if (status === 423) {
-        alert(`Document is locked by another user.\n${msg}`);
+        showDialog('Document Locked', `This document is currently being edited by another user.\n\n${msg}`, 'warning');
       } else if (status === 409) {
-        if (confirm(`Stale lock detected.\n${msg}\n\nTake over the lock?`)) {
-          try {
-            const takeRes = await lockApi.takeover(doc.id);
-            const takeData = takeRes.data?.data ?? takeRes.data;
-            setLockToken(takeData?.lockToken ?? null);
-            setEditingDocId(doc.id);
-            startHeartbeat(doc.id);
-            startTimer();
-            await openInOfficeApp(doc.id, mime);
-          } catch (takeErr) {
-            console.error('[Edit] takeover failed:', takeErr);
-            alert('Failed to take over the lock');
-          }
-        }
+        showDialog('Stale Lock Detected', `${msg}\n\nWould you like to take over the lock?`, 'confirm', {
+          confirmLabel: 'Take Over',
+          cancelLabel: 'Cancel',
+          onConfirm: async () => {
+            setDialogOpen(false);
+            try {
+              const takeRes = await lockApi.takeover(doc.id);
+              const takeData = takeRes.data?.data ?? takeRes.data;
+              setLockToken(takeData?.lockToken ?? null);
+              setEditingDocId(doc.id);
+              startHeartbeat(doc.id);
+              startTimer();
+              await openInOfficeApp(doc.id, mime);
+            } catch (takeErr) {
+              console.error('[Edit] takeover failed:', takeErr);
+              showDialog('Takeover Failed', 'Failed to take over the lock. Please try again later.', 'error');
+            }
+          },
+        });
       } else {
-        alert(msg);
+        showDialog('Edit Failed', msg, 'error');
       }
     }
   };
@@ -242,10 +277,10 @@ export default function DocumentsPage() {
       setPreCheckResult(null);
       setPendingCheckinFile(null);
       loadData();
-      alert('Document checked in successfully!');
+      showDialog('Check-In Successful', 'The document has been checked in with a new version.', 'success');
     } catch (err) {
       console.error('[Checkin] failed:', err);
-      alert('Check-in failed — see console');
+      showDialog('Check-In Failed', 'Failed to check in the document. Please check the console for details.', 'error');
     }
   };
 
@@ -261,18 +296,25 @@ export default function DocumentsPage() {
   };
 
   // ── Cancel Edit: Release lock without checking in ──
-  const handleCancelEdit = async () => {
+  const handleCancelEdit = () => {
     if (!editingDocId) return;
-    if (!confirm('Cancel editing? Any unsaved changes in your local file will be lost on the server side.')) return;
-    try {
-      await lockApi.release(editingDocId);
-    } catch {} // best-effort
-    stopHeartbeat();
-    setEditingDocId(null);
-    setLockToken(null);
-    setWordUrl(null);
-    setEditElapsed('');
-    setHeartbeatCount(0);
+    showDialog('Cancel Editing?', 'Any unsaved changes in your local file will be lost on the server side.', 'confirm', {
+      confirmLabel: 'Cancel Edit',
+      cancelLabel: 'Keep Editing',
+      destructive: true,
+      onConfirm: async () => {
+        setDialogOpen(false);
+        try {
+          await lockApi.release(editingDocId);
+        } catch {} // best-effort
+        stopHeartbeat();
+        setEditingDocId(null);
+        setLockToken(null);
+        setWordUrl(null);
+        setEditElapsed('');
+        setHeartbeatCount(0);
+      },
+    });
   };
 
   // ── Text editing helpers ──
@@ -284,7 +326,7 @@ export default function DocumentsPage() {
       setEditedContent(data?.content ?? '');
       setIsTextEditing(true);
     } catch {
-      alert('Failed to load text content for editing');
+      showDialog('Load Failed', 'Failed to load text content for editing.', 'error');
     }
   };
 
@@ -299,7 +341,7 @@ export default function DocumentsPage() {
       if (updated) setSelectedDoc(updated);
       loadData();
     } catch {
-      alert('Failed to save content');
+      showDialog('Save Failed', 'Failed to save content. Please try again.', 'error');
     }
     setSavingContent(false);
   };
@@ -346,9 +388,24 @@ export default function DocumentsPage() {
     if (!selectedDoc || showNotes || showVersions) {
       if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }
       setTextContent(null);
+      setRedactedContent(null);
+      setShowOriginal(false);
       setIsTextEditing(false);
       return;
     }
+
+    // If PII detected, load redacted content instead of raw file
+    if (selectedDoc.piiDetected && !showOriginal) {
+      setPreviewUrl(null);
+      setTextContent(null);
+      documentApi.getRedactedContent(selectedDoc.id).then(res => {
+        const data = res.data?.data ?? res.data;
+        setRedactedContent(data?.content ?? 'Redacted content not available.');
+      }).catch(() => setRedactedContent('Failed to load redacted content.'));
+      return;
+    }
+
+    setRedactedContent(null);
     const mime = selectedDoc.mimeType || '';
     const isDocx = mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
     const isText = mime.startsWith('text/') || mime === 'application/json';
@@ -369,10 +426,10 @@ export default function DocumentsPage() {
       if (cancelled) return;
       const url = URL.createObjectURL(res.data);
       setPreviewUrl(url);
-    }).catch(() => {});
+    }).catch(err => { console.error('[Documents] preview download failed:', err); });
     return () => { cancelled = true; if (previewUrl) URL.revokeObjectURL(previewUrl); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDoc?.id, showNotes, showVersions]);
+  }, [selectedDoc?.id, showNotes, showVersions, showOriginal]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -449,6 +506,34 @@ export default function DocumentsPage() {
   };
 
   const handleDownload = async (doc: Document) => {
+    if (doc.piiDetected) {
+      showDialog(
+        'Download Contains Sensitive Data',
+        `This document contains PII (${doc.piiTypes?.split(',').join(', ') || 'sensitive data'}) with severity: ${doc.piiSeverity}. The downloaded file will contain unredacted sensitive information. Are you sure you want to proceed?`,
+        'confirm',
+        {
+          confirmLabel: 'Download Anyway',
+          cancelLabel: 'Cancel',
+          destructive: true,
+          onConfirm: async () => {
+            setDialogOpen(false);
+            try {
+              const res = await documentApi.download(doc.id);
+              const url = URL.createObjectURL(res.data);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = doc.title;
+              a.click();
+              URL.revokeObjectURL(url);
+            } catch (err) {
+              console.error('[Documents] download failed:', err);
+              showDialog('Download Failed', 'Failed to download the document.', 'error');
+            }
+          },
+        }
+      );
+      return;
+    }
     try {
       const res = await documentApi.download(doc.id);
       const url = URL.createObjectURL(res.data);
@@ -459,30 +544,44 @@ export default function DocumentsPage() {
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('[Documents] download failed:', err);
-      alert('Download failed — check console for details');
+      showDialog('Download Failed', 'Failed to download the document. Check console for details.', 'error');
     }
   };
 
   const handleCheckout = async (doc: Document) => {
     try {
-      await documentApi.checkout(doc.id);
+      const res = await documentApi.checkout(doc.id);
+      const updated = res.data?.data ?? res.data;
+      if (updated && selectedDoc?.id === doc.id) setSelectedDoc(updated);
       loadData();
+      if (viewMode === 'checkouts') loadMyCheckouts();
     } catch (err) { console.error('[Documents] checkout failed:', err); }
   };
 
   const handleCancelCheckout = async (doc: Document) => {
     try {
-      await documentApi.cancelCheckout(doc.id);
+      const res = await documentApi.cancelCheckout(doc.id);
+      const updated = res.data?.data ?? res.data;
+      if (updated && selectedDoc?.id === doc.id) setSelectedDoc(updated);
       loadData();
+      if (viewMode === 'checkouts') loadMyCheckouts();
     } catch (err) { console.error('[Documents] cancel checkout failed:', err); }
   };
 
   const handleDelete = async (doc: Document) => {
-    if (!confirm(`Delete "${doc.title}"?`)) return;
-    try {
-      await documentApi.delete(doc.id);
-      loadData();
-    } catch (err) { console.error('[Documents] delete failed:', err); }
+    showDialog('Delete Document', `Are you sure you want to delete "${doc.title}"? This action cannot be undone.`, 'confirm', {
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      destructive: true,
+      onConfirm: async () => {
+        setDialogOpen(false);
+        try {
+          await documentApi.delete(doc.id);
+          if (selectedDoc?.id === doc.id) setSelectedDoc(null);
+          loadData();
+        } catch (err) { console.error('[Documents] delete failed:', err); }
+      },
+    });
   };
 
   const handleCreateFolder = async () => {
@@ -492,7 +591,7 @@ export default function DocumentsPage() {
       setShowNewFolder(false);
       setNewFolderName('');
       loadData();
-    } catch (err) { console.error('[Documents] createFolder failed:', err); alert('Failed to create folder'); }
+    } catch (err) { console.error('[Documents] createFolder failed:', err); showDialog('Folder Creation Failed', 'Failed to create folder. Please try again.', 'error'); }
   };
 
   const handleOpenInNewTab = async (doc: Document) => {
@@ -531,6 +630,18 @@ export default function DocumentsPage() {
             <Upload className="h-4 w-4" /> Upload
           </button>
         </div>
+      </div>
+
+      {/* View mode tabs */}
+      <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 w-fit">
+        <button onClick={() => setViewMode('browse')}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${viewMode === 'browse' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          <FileText className="h-4 w-4 inline mr-1.5" />Browse
+        </button>
+        <button onClick={() => { setViewMode('checkouts'); loadMyCheckouts(); }}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${viewMode === 'checkouts' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          <Lock className="h-4 w-4 inline mr-1.5" />My Checkouts
+        </button>
       </div>
 
       {/* New folder dialog */}
@@ -579,6 +690,64 @@ export default function DocumentsPage() {
       )}
 
       {/* Content */}
+      {viewMode === 'checkouts' ? (
+        /* ── My Checkouts View ── */
+        <div className="bg-white rounded-xl border border-slate-200">
+          {checkoutsLoading ? (
+            <div className="flex items-center justify-center p-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+            </div>
+          ) : myCheckouts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-12 text-slate-400 gap-2">
+              <Lock className="h-8 w-8" />
+              <p className="text-sm">You have no checked-out documents</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-left">
+                    <th className="px-4 py-3 font-medium text-slate-500">Name</th>
+                    <th className="px-4 py-3 font-medium text-slate-500 hidden md:table-cell">Size</th>
+                    <th className="px-4 py-3 font-medium text-slate-500 hidden md:table-cell">Checked Out</th>
+                    <th className="px-4 py-3 font-medium text-slate-500">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {myCheckouts.map(doc => (
+                    <tr key={doc.id} className="border-b border-slate-50 hover:bg-slate-50 transition cursor-pointer"
+                      onClick={() => { setSelectedDoc(doc); setViewMode('browse'); }}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">{getFileIcon(doc.mimeType)}</span>
+                          <div>
+                            <p className="font-medium text-slate-900">{doc.title}</p>
+                            <p className="text-xs text-slate-400">{doc.mimeType}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 hidden md:table-cell">{formatBytes(doc.fileSizeBytes ?? doc.fileSize ?? 0)}</td>
+                      <td className="px-4 py-3 text-slate-500 hidden md:table-cell">{doc.checkedOutAt ? formatDate(doc.checkedOutAt) : '—'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <button onClick={(e) => { e.stopPropagation(); handleCancelCheckout(doc); }}
+                            className="px-3 py-1 text-xs border border-green-300 text-green-700 rounded-lg hover:bg-green-50 flex items-center gap-1">
+                            <Unlock className="h-3 w-3" /> Cancel Checkout
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); handleDownload(doc); }}
+                            className="px-3 py-1 text-xs border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-1">
+                            <Download className="h-3 w-3" /> Download
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="bg-white rounded-xl border border-slate-200">
         {loading ? (
           <div className="flex items-center justify-center p-12">
@@ -657,6 +826,14 @@ export default function DocumentsPage() {
                                   SAP {doc.sapDocumentNumber}
                                 </span>
                               )}
+                              {doc.piiDetected && (
+                                <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  doc.piiSeverity === 'CRITICAL' || doc.piiSeverity === 'HIGH' ? 'bg-red-100 text-red-700' :
+                                  doc.piiSeverity === 'MEDIUM' ? 'bg-amber-100 text-amber-700' : 'bg-yellow-100 text-yellow-700'
+                                }`} title={`PII detected: ${doc.piiTypes || 'Unknown'} (${doc.piiSeverity})`}>
+                                  🔒 PII
+                                </span>
+                              )}
                             </p>
                             <p className="text-xs text-slate-400">{doc.mimeType}</p>
                           </div>
@@ -721,11 +898,16 @@ export default function DocumentsPage() {
                       className="flex items-center w-full px-3 py-2 text-sm hover:bg-slate-50">
                       <Lock className="h-4 w-4 mr-2" /> Check Out
                     </button>
-                  ) : (
+                  ) : doc.checkedOutBy === currentUser?.id ? (
                     <button onClick={() => { handleCancelCheckout(doc); setContextMenu(null); setContextMenuPos(null); }}
                       className="flex items-center w-full px-3 py-2 text-sm hover:bg-slate-50">
                       <Unlock className="h-4 w-4 mr-2" /> Cancel Checkout
                     </button>
+                  ) : (
+                    <div className="px-3 py-2 text-xs text-amber-600 flex items-center gap-2">
+                      <Lock className="h-3.5 w-3.5" />
+                      <span>Checked out by {doc.checkedOutByName || 'another user'}</span>
+                    </div>
                   )}
                   <button onClick={() => { setSelectedDoc(doc); setShowWorkflow(true); setContextMenu(null); setContextMenuPos(null); }}
                     className="flex items-center w-full px-3 py-2 text-sm hover:bg-slate-50">
@@ -769,6 +951,7 @@ export default function DocumentsPage() {
           </>
         )}
       </div>
+      )}
 
       {/* Modals / Panels */}
       {showUpload && <UploadModal folderId={currentFolder} projectId={currentFolderProjectId || activeProject?.id} onClose={() => setShowUpload(false)} onComplete={() => { setShowUpload(false); loadData(); }} />}
@@ -1005,7 +1188,7 @@ export default function DocumentsPage() {
                     setShowAssignProject(false);
                     setSelectedDoc(null);
                     loadData();
-                  } catch { alert('Failed to assign project'); }
+                  } catch { showDialog('Assignment Failed', 'Failed to assign project. Please try again.', 'error'); }
                   finally { setAssigningProject(false); }
                 }}
                 className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
@@ -1028,7 +1211,80 @@ export default function DocumentsPage() {
               <button onClick={() => setSelectedDoc(null)} className="p-1 rounded hover:bg-slate-100 text-slate-400">✕</button>
             </div>
             <div className="flex-1 overflow-y-auto overflow-x-auto p-4 space-y-4 relative z-0">
+              {/* ── PII Warning Banner ── */}
+              {selectedDoc.piiDetected && (
+                <div className={`rounded-lg p-3 flex items-start gap-3 ${
+                  selectedDoc.piiSeverity === 'CRITICAL' ? 'bg-red-50 border border-red-300' :
+                  selectedDoc.piiSeverity === 'HIGH' ? 'bg-red-50 border border-red-200' :
+                  selectedDoc.piiSeverity === 'MEDIUM' ? 'bg-amber-50 border border-amber-200' :
+                  'bg-yellow-50 border border-yellow-200'
+                }`}>
+                  <Shield className={`h-5 w-5 flex-shrink-0 mt-0.5 ${
+                    selectedDoc.piiSeverity === 'CRITICAL' || selectedDoc.piiSeverity === 'HIGH' ? 'text-red-600' :
+                    selectedDoc.piiSeverity === 'MEDIUM' ? 'text-amber-600' : 'text-yellow-600'
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold ${
+                      selectedDoc.piiSeverity === 'CRITICAL' || selectedDoc.piiSeverity === 'HIGH' ? 'text-red-800' :
+                      selectedDoc.piiSeverity === 'MEDIUM' ? 'text-amber-800' : 'text-yellow-800'
+                    }`}>
+                      ⚠ Sensitive Information Detected
+                      <span className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        selectedDoc.piiSeverity === 'CRITICAL' ? 'bg-red-200 text-red-800' :
+                        selectedDoc.piiSeverity === 'HIGH' ? 'bg-red-100 text-red-700' :
+                        selectedDoc.piiSeverity === 'MEDIUM' ? 'bg-amber-100 text-amber-700' :
+                        'bg-yellow-100 text-yellow-700'
+                      }`}>{selectedDoc.piiSeverity}</span>
+                    </p>
+                    <p className={`text-xs mt-1 ${
+                      selectedDoc.piiSeverity === 'CRITICAL' || selectedDoc.piiSeverity === 'HIGH' ? 'text-red-600' :
+                      selectedDoc.piiSeverity === 'MEDIUM' ? 'text-amber-600' : 'text-yellow-600'
+                    }`}>
+                      This document contains personally identifiable information (PII): {selectedDoc.piiTypes?.split(',').join(', ') || 'Unknown types'}
+                    </p>
+                    {selectedDoc.piiScanDate && (
+                      <p className="text-[10px] text-slate-400 mt-1">Scanned: {formatDate(selectedDoc.piiScanDate)}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* ── Preview area ── */}
+
+              {/* Redacted content preview — shown when PII detected */}
+              {selectedDoc.piiDetected && redactedContent && !showOriginal && (
+                <div className="space-y-3">
+                  <div className="bg-slate-900 rounded-lg p-6 overflow-auto" style={{ maxHeight: 500 }}>
+                    <pre className="text-sm text-slate-200 whitespace-pre-wrap font-sans leading-relaxed">{redactedContent}</pre>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] text-slate-400 italic">
+                      🔒 Preview shows redacted content — sensitive data has been automatically masked
+                    </p>
+                    {currentUser?.roles?.includes('ADMIN') && (
+                      <button
+                        onClick={() => setShowOriginal(true)}
+                        className="text-[11px] text-indigo-500 hover:text-indigo-400 hover:underline font-medium"
+                      >
+                        View Original (Admin)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Admin viewing original — show back button */}
+              {selectedDoc.piiDetected && showOriginal && (
+                <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+                  <p className="text-xs text-amber-700">⚠ Viewing unredacted original — sensitive data is visible</p>
+                  <button
+                    onClick={() => setShowOriginal(false)}
+                    className="text-xs text-indigo-600 hover:underline font-medium"
+                  >
+                    ← Back to Redacted View
+                  </button>
+                </div>
+              )}
 
               {/* Image preview */}
               {selectedDoc.mimeType?.startsWith('image/') && previewUrl && (
@@ -1040,7 +1296,9 @@ export default function DocumentsPage() {
               {/* PDF preview */}
               {selectedDoc.mimeType === 'application/pdf' && previewUrl && (
                 <div className="bg-slate-100 rounded-lg overflow-hidden" style={{ height: 500 }}>
-                  <iframe src={previewUrl} className="w-full h-full border-0" title="PDF Preview" />
+                  <object data={previewUrl} type="application/pdf" className="w-full h-full">
+                    <iframe src={previewUrl} className="w-full h-full border-0" title="PDF Preview" />
+                  </object>
                 </div>
               )}
 
@@ -1315,15 +1573,18 @@ export default function DocumentsPage() {
                   const mime = selectedDoc.mimeType || '';
                   const isText = mime.startsWith('text/') || mime === 'application/json';
                   const officeMapping = OFFICE_MIME_MAP[mime];
+                  const lockedByOther = (selectedDoc.isCheckedOut || selectedDoc.checkedOut) && selectedDoc.checkedOutBy !== currentUser?.id;
                   if (isText) return (
-                    <button onClick={handleEditText}
-                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700 flex items-center gap-1" title="Edit text content">
+                    <button onClick={handleEditText} disabled={lockedByOther}
+                      className={`px-4 py-2 rounded-lg text-sm flex items-center gap-1 ${lockedByOther ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
+                      title={lockedByOther ? `Locked by ${selectedDoc.checkedOutByName || 'another user'}` : 'Edit text content'}>
                       <Edit3 className="h-4 w-4" />
                     </button>
                   );
                   if (officeMapping) return (
-                    <button onClick={() => handleEditInWord(selectedDoc)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 flex items-center gap-1" title={`Edit in ${officeMapping.label}`}>
+                    <button onClick={() => handleEditInWord(selectedDoc)} disabled={lockedByOther}
+                      className={`px-4 py-2 rounded-lg text-sm flex items-center gap-1 ${lockedByOther ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                      title={lockedByOther ? `Locked by ${selectedDoc.checkedOutByName || 'another user'}` : `Edit in ${officeMapping.label}`}>
                       <Edit3 className="h-4 w-4" />
                     </button>
                   );
@@ -1355,24 +1616,41 @@ export default function DocumentsPage() {
                 </button>
               </div>
               {editingDocId !== selectedDoc.id && (
-                <div className="flex gap-2">
-                  {!(selectedDoc.isCheckedOut || selectedDoc.checkedOut) ? (
-                    <button onClick={() => { handleCheckout(selectedDoc); setSelectedDoc(null); }}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-amber-300 text-amber-700 rounded-lg text-sm hover:bg-amber-50">
-                      <Lock className="h-4 w-4" /> Check Out
-                    </button>
-                  ) : (
-                    <button onClick={() => { handleCancelCheckout(selectedDoc); setSelectedDoc(null); }}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-green-300 text-green-700 rounded-lg text-sm hover:bg-green-50">
-                      <Unlock className="h-4 w-4" /> Cancel Checkout
-                    </button>
+                <>
+                  {/* Checked-out-by-other info banner */}
+                  {(selectedDoc.isCheckedOut || selectedDoc.checkedOut) && selectedDoc.checkedOutBy !== currentUser?.id && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+                      <Lock className="h-4 w-4 flex-shrink-0" />
+                      <span>
+                        Checked out by <strong>{selectedDoc.checkedOutByName || 'another user'}</strong>
+                        {selectedDoc.checkedOutAt && (
+                          <> on {new Date(selectedDoc.checkedOutAt).toLocaleString()}</>
+                        )}
+                      </span>
+                    </div>
                   )}
-                </div>
+                  <div className="flex gap-2">
+                    {!(selectedDoc.isCheckedOut || selectedDoc.checkedOut) ? (
+                      <button onClick={() => handleCheckout(selectedDoc)}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-amber-300 text-amber-700 rounded-lg text-sm hover:bg-amber-50">
+                        <Lock className="h-4 w-4" /> Check Out
+                      </button>
+                    ) : selectedDoc.checkedOutBy === currentUser?.id ? (
+                      <button onClick={() => handleCancelCheckout(selectedDoc)}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-green-300 text-green-700 rounded-lg text-sm hover:bg-green-50">
+                        <Unlock className="h-4 w-4" /> Cancel Checkout
+                      </button>
+                    ) : null}
+                  </div>
+                </>
               )}
             </div>
           </div>
         </div>
       )}
+
+      {/* Styled Dialog (replaces all alert/confirm) */}
+      <AppDialog open={dialogOpen} onClose={() => setDialogOpen(false)} {...dialogProps} />
     </div>
   );
 }
@@ -1453,7 +1731,7 @@ function DocumentWorkflowPanel({
       const res = await workflowApi.getByDocument(doc.id);
       setInstances(res.data?.data ?? res.data ?? []);
     } catch (err: any) {
-      alert(err?.response?.data?.message || 'Failed to start workflow');
+      showDialog('Workflow Error', err?.response?.data?.message || 'Failed to start workflow', 'error');
     }
     setStarting(false);
   };
