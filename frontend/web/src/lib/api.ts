@@ -197,6 +197,8 @@ export const workflowApi = {
   cancel: (id: string, reason?: string) =>
     api.post(`/workflow/instances/${id}/cancel`, null, { params: { comments: reason } }),
   getHistory: (id: string) => api.get(`/workflow/instances/${id}/history`),
+  requestPeerReview: (id: string, reviewerId: string, comments?: string) =>
+    api.post(`/workflow/instances/${id}/peer-review`, { reviewerId, comments }),
   getByStatus: (status: string, page = 0, size = 20) =>
     api.get(`/workflow/instances/by-status/${status}`, { params: { page, size } }),
   getByDocument: (documentId: string) =>
@@ -457,6 +459,10 @@ export const aiApi = {
   generateWorkflow: (prompt: string) =>
     api.post('/ai/generate-workflow', { prompt }),
   getStatus: () => api.get('/ai/status'),
+  summarize: (content: string, title: string) =>
+    api.post('/ai/summarize', { content, title }),
+  ask: (content: string, title: string, question: string) =>
+    api.post('/ai/ask', { content, title, question }),
 };
 
 /* ── Email Ingestion ── */

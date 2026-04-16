@@ -36,17 +36,16 @@ public class ProjectService {
 
     // ====================== Bitwise permission name mapping ======================
     private static final Map<String, Long> PERMISSION_MAP = Map.of(
-            "READ",          ProjectMember.PERM_READ,
-            "WRITE",         ProjectMember.PERM_WRITE,
-            "DELETE",        ProjectMember.PERM_DELETE,
-            "MANAGE",        ProjectMember.PERM_MANAGE,
-            "APPROVE",       ProjectMember.PERM_APPROVE,
-            "AI_INVOKE",     ProjectMember.PERM_AI_INVOKE,
-            "AI_CONFIGURE",  ProjectMember.PERM_AI_CONFIGURE,
-            "RETENTION",     ProjectMember.PERM_RETENTION,
-            "EXPORT",        ProjectMember.PERM_EXPORT,
-            "ADMIN",         ProjectMember.PERM_ADMIN
-    );
+            "READ", ProjectMember.PERM_READ,
+            "WRITE", ProjectMember.PERM_WRITE,
+            "DELETE", ProjectMember.PERM_DELETE,
+            "MANAGE", ProjectMember.PERM_MANAGE,
+            "APPROVE", ProjectMember.PERM_APPROVE,
+            "AI_INVOKE", ProjectMember.PERM_AI_INVOKE,
+            "AI_CONFIGURE", ProjectMember.PERM_AI_CONFIGURE,
+            "RETENTION", ProjectMember.PERM_RETENTION,
+            "EXPORT", ProjectMember.PERM_EXPORT,
+            "ADMIN", ProjectMember.PERM_ADMIN);
 
     // ====================== Project CRUD ======================
 
@@ -74,7 +73,8 @@ public class ProjectService {
                 .defaultRetentionPeriodYears(request.getDefaultRetentionPeriodYears())
                 .retentionDocumentTypes(request.getRetentionDocumentTypes())
                 .jurisdictionCode(request.getJurisdictionCode())
-                .privacyRedactionEnabled(request.getPrivacyRedactionEnabled() != null ? request.getPrivacyRedactionEnabled() : false)
+                .privacyRedactionEnabled(
+                        request.getPrivacyRedactionEnabled() != null ? request.getPrivacyRedactionEnabled() : false)
                 .complianceCategory(request.getComplianceCategory())
                 .build();
 
@@ -85,7 +85,7 @@ public class ProjectService {
                 .projectId(project.getId())
                 .userId(ownerId)
                 .roleId(findAdminRoleId())
-                .permissionsMask(Long.MAX_VALUE)  // all permissions
+                .permissionsMask(Long.MAX_VALUE) // all permissions
                 .build();
         memberRepository.save(ownerMember);
 
@@ -130,16 +130,26 @@ public class ProjectService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
 
-        if (request.getName() != null) project.setName(request.getName());
-        if (request.getDescription() != null) project.setDescription(request.getDescription());
-        if (request.getMetadataSchema() != null) project.setMetadataSchema(request.getMetadataSchema());
-        if (request.getAiEnabled() != null) project.setAiEnabled(request.getAiEnabled());
-        if (request.getDefaultWorkflowDefinitionId() != null) project.setDefaultWorkflowDefinitionId(request.getDefaultWorkflowDefinitionId());
-        if (request.getDefaultRetentionPeriodYears() != null) project.setDefaultRetentionPeriodYears(request.getDefaultRetentionPeriodYears());
-        if (request.getRetentionDocumentTypes() != null) project.setRetentionDocumentTypes(request.getRetentionDocumentTypes());
-        if (request.getJurisdictionCode() != null) project.setJurisdictionCode(request.getJurisdictionCode());
-        if (request.getPrivacyRedactionEnabled() != null) project.setPrivacyRedactionEnabled(request.getPrivacyRedactionEnabled());
-        if (request.getComplianceCategory() != null) project.setComplianceCategory(request.getComplianceCategory());
+        if (request.getName() != null)
+            project.setName(request.getName());
+        if (request.getDescription() != null)
+            project.setDescription(request.getDescription());
+        if (request.getMetadataSchema() != null)
+            project.setMetadataSchema(request.getMetadataSchema());
+        if (request.getAiEnabled() != null)
+            project.setAiEnabled(request.getAiEnabled());
+        if (request.getDefaultWorkflowDefinitionId() != null)
+            project.setDefaultWorkflowDefinitionId(request.getDefaultWorkflowDefinitionId());
+        if (request.getDefaultRetentionPeriodYears() != null)
+            project.setDefaultRetentionPeriodYears(request.getDefaultRetentionPeriodYears());
+        if (request.getRetentionDocumentTypes() != null)
+            project.setRetentionDocumentTypes(request.getRetentionDocumentTypes());
+        if (request.getJurisdictionCode() != null)
+            project.setJurisdictionCode(request.getJurisdictionCode());
+        if (request.getPrivacyRedactionEnabled() != null)
+            project.setPrivacyRedactionEnabled(request.getPrivacyRedactionEnabled());
+        if (request.getComplianceCategory() != null)
+            project.setComplianceCategory(request.getComplianceCategory());
 
         project = projectRepository.save(project);
 
@@ -169,7 +179,8 @@ public class ProjectService {
         if (request.getPermissions() != null) {
             for (String perm : request.getPermissions()) {
                 Long bit = PERMISSION_MAP.get(perm.toUpperCase());
-                if (bit != null) mask |= bit;
+                if (bit != null)
+                    mask |= bit;
             }
         }
 
@@ -210,7 +221,8 @@ public class ProjectService {
     }
 
     @Transactional
-    public ProjectMemberDto updateMemberPermissions(UUID projectId, UUID userId, List<String> permissions, UUID updatedBy) {
+    public ProjectMemberDto updateMemberPermissions(UUID projectId, UUID userId, List<String> permissions,
+            UUID updatedBy) {
         ProjectMember member = memberRepository.findByProjectIdAndUserId(projectId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("ProjectMember", "userId", userId));
 
@@ -218,7 +230,8 @@ public class ProjectService {
         if (permissions != null) {
             for (String perm : permissions) {
                 Long bit = PERMISSION_MAP.get(perm.toUpperCase());
-                if (bit != null) mask |= bit;
+                if (bit != null)
+                    mask |= bit;
             }
         }
         member.setPermissionsMask(mask);
@@ -229,7 +242,8 @@ public class ProjectService {
                 .action("PROJECT_MEMBER_UPDATED")
                 .resourceType("PROJECT")
                 .resourceId(projectId)
-                .details(Map.of("memberId", userId.toString(), "permissions", String.join(",", permissions != null ? permissions : List.of())))
+                .details(Map.of("memberId", userId.toString(), "permissions",
+                        String.join(",", permissions != null ? permissions : List.of())))
                 .build());
 
         return toMemberDto(member);
@@ -381,7 +395,8 @@ public class ProjectService {
                 .resourceName(project.getName())
                 .build());
 
-        log.info("AI {} for project {} by user {}", project.getAiEnabled() ? "enabled" : "disabled", project.getName(), userId);
+        log.info("AI {} for project {} by user {}", project.getAiEnabled() ? "enabled" : "disabled", project.getName(),
+                userId);
         return toDto(project);
     }
 
@@ -416,7 +431,8 @@ public class ProjectService {
 
     private boolean isSystemAdmin(UUID userId) {
         UUID adminRoleId = roleRepository.findByName("SYSTEM_ADMIN").map(Role::getId).orElse(null);
-        if (adminRoleId == null) return false;
+        if (adminRoleId == null)
+            return false;
         return memberRepository.findActiveProjectMemberships(userId).stream()
                 .anyMatch(pm -> adminRoleId.equals(pm.getRoleId()));
     }

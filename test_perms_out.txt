@@ -1,0 +1,21 @@
+Admin userId: b0000000-0000-0000-0000-000000000001
+
+Projects (5):
+  e0000000... name=Default Project ownerId=b0000000-0000-0000-0000-000000000001
+  feb91ac7... name=another ownerId=b0000000-0000-0000-0000-000000000001
+  d41ea779... name=test ownerId=b0000000-0000-0000-0000-000000000001
+  8679e394... name=Sub-Project Alpha ownerId=b0000000-0000-0000-0000-000000000001
+  fdaf0be0... name=Test ownerId=69c66909-96e1-4036-9f9e-7667dda1547b
+
+Members of 'Default Project' (e0000000-0000-0000-0000-000000000001):
+  userId=b0000000... user=admin perms=['AI_INVOKE', 'AI_CONFIGURE', 'MANAGE', 'ADMIN', 'EXPORT', 'READ', 'WRITE', 'DELETE', 'APPROVE', 'RETENTION'] mask=9223372036854775807
+  userId=910ca17f... user=reviewer1 perms=[] mask=0
+  userId=356a3629... user=approver1 perms=[] mask=0
+  userId=4692acc8... user=manager1 perms=[] mask=0
+  userId=f046dacb... user=viewer1 perms=[] mask=0
+
+Test project ownerId: 69c66909-96e1-4036-9f9e-7667dda1547b
+  userId=69c66909... user=testAdmin perms=['AI_INVOKE', 'AI_CONFIGURE', 'MANAGE', 'ADMIN', 'EXPORT', 'READ', 'WRITE', 'DELETE', 'APPROVE', 'RETENTION'] mask=9223372036854775807
+  userId=7b9fed00... user=testa perms=['READ'] mask=1
+  userId=f046dacb... user=viewer1 perms=['READ', 'WRITE'] mask=3
+  userId=e1865996... user=testAp perms=['READ', 'WRITE'] mask=3

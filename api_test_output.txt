@@ -1,0 +1,9 @@
+LOGIN: 200
+TOKEN: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJiMDAwMDA
+LIST: 200
+DOCS: 3
+DOC: 30e75b8b-f80c-4b89-8... title=cloud infra mime=application/pdf
+DOWNLOAD: status=200 ct=application/pdf size=894946
+CONTENT: status=400
+WOPI TOKEN: status=200
+WOPI DATA: {'success': True, 'data': {'expiresAt': '2026-04-14T09:49:57.149113478Z', 'wopiSrc': '/wopi/files/30e75b8b-f80c-4b89-8768-6ebd73a8c34e', 'accessToken': 'KKAiPusvkONNhjDWGeFcBuHRJ8pcO4x4q-3RkruYbokZXoYyORSqS_RiP0eEvjXd'}, 'timestamp': '2026-04-14T05:49:57.234300819Z'}

@@ -9,7 +9,11 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "email_ingestion_config")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class EmailIngestionConfig {
 
     @Id
@@ -20,7 +24,7 @@ public class EmailIngestionConfig {
     private String name;
 
     @Column(nullable = false)
-    private String protocol;  // IMAP or EWS
+    private String protocol; // IMAP or EWS
 
     @Column(name = "imap_host")
     private String imapHost;
@@ -72,14 +76,22 @@ public class EmailIngestionConfig {
     void prePersist() {
         createdAt = Instant.now();
         updatedAt = Instant.now();
-        if (protocol == null) protocol = "IMAP";
-        if (enabled == null) enabled = false;
-        if (useSsl == null) useSsl = true;
-        if (pollInterval == null) pollInterval = 5;
-        if (folderName == null) folderName = "INBOX";
-        if (imapPort == null && "IMAP".equalsIgnoreCase(protocol)) imapPort = 993;
+        if (protocol == null)
+            protocol = "IMAP";
+        if (enabled == null)
+            enabled = false;
+        if (useSsl == null)
+            useSsl = true;
+        if (pollInterval == null)
+            pollInterval = 5;
+        if (folderName == null)
+            folderName = "INBOX";
+        if (imapPort == null && "IMAP".equalsIgnoreCase(protocol))
+            imapPort = 993;
     }
 
     @PreUpdate
-    void preUpdate() { updatedAt = Instant.now(); }
+    void preUpdate() {
+        updatedAt = Instant.now();
+    }
 }

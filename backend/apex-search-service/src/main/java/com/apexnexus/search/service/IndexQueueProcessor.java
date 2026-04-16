@@ -43,10 +43,12 @@ public class IndexQueueProcessor {
         int processed = 0;
         while (processed < batchSize) {
             String json = redisTemplate.opsForList().leftPop(QUEUE_KEY);
-            if (json == null) break;
+            if (json == null)
+                break;
 
             try {
-                Map<String, Object> event = objectMapper.readValue(json, new TypeReference<>() {});
+                Map<String, Object> event = objectMapper.readValue(json, new TypeReference<>() {
+                });
                 String action = (String) event.get("action");
 
                 if ("INDEX".equals(action) || "REINDEX".equals(action)) {
@@ -88,7 +90,8 @@ public class IndexQueueProcessor {
     @SuppressWarnings("unchecked")
     private void enrichWithExtractedContent(Map<String, Object> document, Map<String, Object> event) {
         String fileDataBase64 = (String) event.get("fileData");
-        if (fileDataBase64 == null || fileDataBase64.isBlank()) return;
+        if (fileDataBase64 == null || fileDataBase64.isBlank())
+            return;
 
         try {
             byte[] fileData = Base64.getDecoder().decode(fileDataBase64);
@@ -102,10 +105,11 @@ public class IndexQueueProcessor {
                 log.info("Enriched document '{}' with extracted content ({} chars, {}ms)",
                         fileName, result.getContentLength(), result.getExtractionTimeMs());
 
-                // Auto-classify based on extracted content (only if AI Classification plugin is ACTIVE)
+                // Auto-classify based on extracted content (only if AI Classification plugin is
+                // ACTIVE)
                 if (isClassificationPluginActive()) {
-                    ClassificationService.ClassificationResult classification =
-                            classificationService.classify(fileName, mimeType, result.getText(), result.getMetadata());
+                    ClassificationService.ClassificationResult classification = classificationService.classify(fileName,
+                            mimeType, result.getText(), result.getMetadata());
                     if (classification.getConfidence() >= 0.2) {
                         document.put("classificationLabel", classification.getLabel());
                         document.put("classificationCategory", classification.getCategory());
@@ -116,12 +120,13 @@ public class IndexQueueProcessor {
                         if (docId != null) {
                             try {
                                 jdbcTemplate.update(
-                                    "UPDATE documents SET classification_label = ? WHERE id = ?::uuid",
-                                    classification.getLabel(), docId);
+                                        "UPDATE documents SET classification_label = ? WHERE id = ?::uuid",
+                                        classification.getLabel(), docId);
                                 log.info("Classified document '{}' as '{}' (confidence: {})",
                                         fileName, classification.getLabel(), classification.getConfidence());
                             } catch (Exception ex) {
-                                log.warn("Failed to update classification_label for doc {}: {}", docId, ex.getMessage());
+                                log.warn("Failed to update classification_label for doc {}: {}", docId,
+                                        ex.getMessage());
                             }
                         }
                     }
@@ -139,8 +144,8 @@ public class IndexQueueProcessor {
                         document.put("m365Link", m365Link);
                         try {
                             jdbcTemplate.update(
-                                "UPDATE documents SET m365_link = ? WHERE id = ?::uuid",
-                                m365Link, docId);
+                                    "UPDATE documents SET m365_link = ? WHERE id = ?::uuid",
+                                    m365Link, docId);
                             log.info("Microsoft 365 link generated for document '{}': {}", title, m365Link);
                         } catch (Exception ex) {
                             log.warn("Failed to update m365_link for doc {}: {}", docId, ex.getMessage());
@@ -150,7 +155,8 @@ public class IndexQueueProcessor {
                     log.debug("Microsoft 365 Integration plugin is not active — skipping M365 linking");
                 }
 
-                // SAP ERP Connector — generate SAP document number for invoices/contracts when active
+                // SAP ERP Connector — generate SAP document number for invoices/contracts when
+                // active
                 if (isSapErpPluginActive()) {
                     String docId = (String) document.get("documentId");
                     String classLabel = (String) document.get("classificationLabel");
@@ -170,8 +176,8 @@ public class IndexQueueProcessor {
                         document.put("sapDocumentNumber", sapDocNumber);
                         try {
                             jdbcTemplate.update(
-                                "UPDATE documents SET sap_document_number = ? WHERE id = ?::uuid",
-                                sapDocNumber, docId);
+                                    "UPDATE documents SET sap_document_number = ? WHERE id = ?::uuid",
+                                    sapDocNumber, docId);
                             log.info("SAP document number {} assigned to '{}' (classification: {})",
                                     sapDocNumber, title, classLabel);
                         } catch (Exception ex) {
@@ -187,8 +193,8 @@ public class IndexQueueProcessor {
                 if (docIdForContent != null) {
                     try {
                         jdbcTemplate.update(
-                            "UPDATE documents SET extracted_content = ? WHERE id = ?::uuid",
-                            result.getText(), docIdForContent);
+                                "UPDATE documents SET extracted_content = ? WHERE id = ?::uuid",
+                                result.getText(), docIdForContent);
                     } catch (Exception ex) {
                         log.warn("Failed to save extracted content for doc {}: {}", docIdForContent, ex.getMessage());
                     }
@@ -198,7 +204,8 @@ public class IndexQueueProcessor {
                 String docId4Pii = (String) document.get("documentId");
                 if (docId4Pii != null) {
                     try {
-                        GdprScannerService.GdprScanResult piiResult = gdprScannerService.scan(result.getText(), docId4Pii);
+                        GdprScannerService.GdprScanResult piiResult = gdprScannerService.scan(result.getText(),
+                                docId4Pii);
                         document.put("piiDetected", piiResult.isPiiFound());
                         document.put("piiSeverity", piiResult.getSeverity().name());
 
@@ -211,14 +218,14 @@ public class IndexQueueProcessor {
                             document.put("piiTypes", piiTypes);
 
                             jdbcTemplate.update(
-                                "UPDATE documents SET pii_detected = TRUE, pii_severity = ?, pii_types = ?, pii_scan_date = NOW() WHERE id = ?::uuid",
-                                piiResult.getSeverity().name(), piiTypes, docId4Pii);
+                                    "UPDATE documents SET pii_detected = TRUE, pii_severity = ?, pii_types = ?, pii_scan_date = NOW() WHERE id = ?::uuid",
+                                    piiResult.getSeverity().name(), piiTypes, docId4Pii);
                             log.warn("PII DETECTED in document '{}': severity={}, types=[{}], count={}",
                                     fileName, piiResult.getSeverity(), piiTypes, piiResult.getTotalPiiCount());
                         } else {
                             jdbcTemplate.update(
-                                "UPDATE documents SET pii_detected = FALSE, pii_severity = 'NONE', pii_scan_date = NOW() WHERE id = ?::uuid",
-                                docId4Pii);
+                                    "UPDATE documents SET pii_detected = FALSE, pii_severity = 'NONE', pii_scan_date = NOW() WHERE id = ?::uuid",
+                                    docId4Pii);
                             log.info("GDPR scan clean for document '{}' — no PII found", fileName);
                         }
                     } catch (Exception ex) {
@@ -246,7 +253,8 @@ public class IndexQueueProcessor {
     }
 
     /**
-     * Handle a dedicated content extraction request — extract and update ES document.
+     * Handle a dedicated content extraction request — extract and update ES
+     * document.
      */
     @SuppressWarnings("unchecked")
     private void handleContentExtraction(Map<String, Object> event) {
@@ -268,7 +276,8 @@ public class IndexQueueProcessor {
                 Map<String, Object> update = new HashMap<>();
                 update.put("content", result.getText());
                 searchService.updateDocument(documentId, update);
-                log.info("Content extracted and indexed for document {}: {} chars", documentId, result.getContentLength());
+                log.info("Content extracted and indexed for document {}: {} chars", documentId,
+                        result.getContentLength());
             }
         } catch (Exception e) {
             log.error("Failed to extract content for document {}: {}", documentId, e.getMessage());
@@ -276,13 +285,14 @@ public class IndexQueueProcessor {
     }
 
     /**
-     * Check if the AI Document Classification plugin is ACTIVE in the plugin_registry.
+     * Check if the AI Document Classification plugin is ACTIVE in the
+     * plugin_registry.
      */
     private boolean isClassificationPluginActive() {
         try {
             Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM plugin_registry WHERE name = 'AI Document Classification' AND status = 'ACTIVE'",
-                Integer.class);
+                    "SELECT COUNT(*) FROM plugin_registry WHERE name = 'AI Document Classification' AND status = 'ACTIVE'",
+                    Integer.class);
             return count != null && count > 0;
         } catch (Exception e) {
             log.warn("Failed to check AI Classification plugin status: {}", e.getMessage());
@@ -293,8 +303,8 @@ public class IndexQueueProcessor {
     private boolean isMicrosoft365PluginActive() {
         try {
             Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM plugin_registry WHERE name = 'Microsoft 365 Integration' AND status = 'ACTIVE'",
-                Integer.class);
+                    "SELECT COUNT(*) FROM plugin_registry WHERE name = 'Microsoft 365 Integration' AND status = 'ACTIVE'",
+                    Integer.class);
             return count != null && count > 0;
         } catch (Exception e) {
             log.warn("Failed to check Microsoft 365 plugin status: {}", e.getMessage());
@@ -305,8 +315,8 @@ public class IndexQueueProcessor {
     private boolean isSapErpPluginActive() {
         try {
             Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM plugin_registry WHERE name = 'SAP ERP Connector' AND status = 'ACTIVE'",
-                Integer.class);
+                    "SELECT COUNT(*) FROM plugin_registry WHERE name = 'SAP ERP Connector' AND status = 'ACTIVE'",
+                    Integer.class);
             return count != null && count > 0;
         } catch (Exception e) {
             log.warn("Failed to check SAP ERP Connector plugin status: {}", e.getMessage());

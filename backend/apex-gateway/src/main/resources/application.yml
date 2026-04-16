@@ -13,7 +13,7 @@ spring:
         - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
       globalcors:
         corsConfigurations:
-          '[/**]':
+          "[/**]":
             allowedOriginPatterns: "*"
             allowedMethods:
               - GET
@@ -100,6 +100,9 @@ spring:
             - Path=/api/ai/**
           filters:
             - StripPrefix=1
+          metadata:
+            response-timeout: 180000
+            connect-timeout: 5000
 
         # Search Service
         - id: search-service

@@ -45,7 +45,8 @@ public class DocumentService {
     private final VersionAnomalyClient versionAnomalyClient;
 
     @Transactional
-    public DocumentDto createDocument(CreateDocumentRequest request, MultipartFile file, UUID authorId) throws Exception {
+    public DocumentDto createDocument(CreateDocumentRequest request, MultipartFile file, UUID authorId)
+            throws Exception {
         byte[] fileData = file.getBytes();
         String sha256 = storageService.calculateSha256(fileData);
         String objectGuid = UUID.randomUUID().toString().replace("-", "");
@@ -60,8 +61,8 @@ public class DocumentService {
         if (resolvedProjectId == null && request.getFolderId() != null) {
             try {
                 UUID folderProjectId = jdbcTemplate.queryForObject(
-                    "SELECT project_id FROM folders WHERE id = ?",
-                    UUID.class, request.getFolderId());
+                        "SELECT project_id FROM folders WHERE id = ?",
+                        UUID.class, request.getFolderId());
                 if (folderProjectId != null) {
                     resolvedProjectId = folderProjectId;
                     log.info("Inherited project {} from folder {}", resolvedProjectId, request.getFolderId());
@@ -78,9 +79,9 @@ public class DocumentService {
         if (resolvedProjectId != null) {
             try {
                 Map<String, Object> project = jdbcTemplate.queryForMap(
-                    "SELECT default_retention_period_years, privacy_redaction_enabled, " +
-                    "jurisdiction_code FROM projects WHERE id = ?",
-                    resolvedProjectId);
+                        "SELECT default_retention_period_years, privacy_redaction_enabled, " +
+                                "jurisdiction_code FROM projects WHERE id = ?",
+                        resolvedProjectId);
 
                 Integer projectRetention = (Integer) project.get("default_retention_period_years");
                 if (projectRetention != null && projectRetention > retentionYears) {
@@ -97,9 +98,9 @@ public class DocumentService {
                 if (jurisdictionCode != null && !jurisdictionCode.isBlank()) {
                     try {
                         Integer minRetention = jdbcTemplate.queryForObject(
-                            "SELECT MAX(jrr.min_retention_years) FROM jurisdiction_retention_rules jrr " +
-                            "JOIN jurisdictions j ON jrr.jurisdiction_id = j.id WHERE j.code = ?",
-                            Integer.class, jurisdictionCode);
+                                "SELECT MAX(jrr.min_retention_years) FROM jurisdiction_retention_rules jrr " +
+                                        "JOIN jurisdictions j ON jrr.jurisdiction_id = j.id WHERE j.code = ?",
+                                Integer.class, jurisdictionCode);
                         if (minRetention != null && minRetention > retentionYears) {
                             retentionYears = minRetention;
                         }
@@ -236,9 +237,9 @@ public class DocumentService {
             doc.setProjectId(request.getProjectId());
             try {
                 Map<String, Object> project = jdbcTemplate.queryForMap(
-                    "SELECT default_retention_period_years, privacy_redaction_enabled, " +
-                    "jurisdiction_code FROM projects WHERE id = ?",
-                    request.getProjectId());
+                        "SELECT default_retention_period_years, privacy_redaction_enabled, " +
+                                "jurisdiction_code FROM projects WHERE id = ?",
+                        request.getProjectId());
 
                 Integer projectRetention = (Integer) project.get("default_retention_period_years");
                 int currentRetention = doc.getRetentionPeriodYears() != null ? doc.getRetentionPeriodYears() : 0;
@@ -255,9 +256,9 @@ public class DocumentService {
                 if (jurisdictionCode != null && !jurisdictionCode.isBlank()) {
                     try {
                         Integer minRetention = jdbcTemplate.queryForObject(
-                            "SELECT MAX(jrr.min_retention_years) FROM jurisdiction_retention_rules jrr " +
-                            "JOIN jurisdictions j ON jrr.jurisdiction_id = j.id WHERE j.code = ?",
-                            Integer.class, jurisdictionCode);
+                                "SELECT MAX(jrr.min_retention_years) FROM jurisdiction_retention_rules jrr " +
+                                        "JOIN jurisdictions j ON jrr.jurisdiction_id = j.id WHERE j.code = ?",
+                                Integer.class, jurisdictionCode);
                         int docRetention = doc.getRetentionPeriodYears() != null ? doc.getRetentionPeriodYears() : 0;
                         if (minRetention != null && minRetention > docRetention) {
                             doc.setRetentionPeriodYears(minRetention);
@@ -469,12 +470,14 @@ public class DocumentService {
     }
 
     @Transactional
-    public DocumentDto checkIn(UUID documentId, MultipartFile file, String changeSummary, UUID userId) throws Exception {
+    public DocumentDto checkIn(UUID documentId, MultipartFile file, String changeSummary, UUID userId)
+            throws Exception {
         return checkIn(documentId, file, changeSummary, "MAJOR", userId);
     }
 
     @Transactional
-    public DocumentDto checkIn(UUID documentId, MultipartFile file, String changeSummary, String versionType, UUID userId) throws Exception {
+    public DocumentDto checkIn(UUID documentId, MultipartFile file, String changeSummary, String versionType,
+            UUID userId) throws Exception {
         Document doc = findDocumentOrThrow(documentId);
 
         if (!Boolean.TRUE.equals(doc.getIsCheckedOut())) {
@@ -486,10 +489,12 @@ public class DocumentService {
 
         byte[] fileData = file.getBytes();
         String sha256 = storageService.calculateSha256(fileData);
-        // Determine next version from actual DB records (not doc.currentVersion which can be stale)
+        // Determine next version from actual DB records (not doc.currentVersion which
+        // can be stale)
         int newVersion = versionRepository.findByDocumentIdOrderByVersionNumberDesc(documentId)
                 .stream().findFirst().map(v -> v.getVersionNumber() + 1).orElse(1);
-        String storageKey = String.format("documents/%s/v%d/%s", doc.getObjectGuid(), newVersion, file.getOriginalFilename());
+        String storageKey = String.format("documents/%s/v%d/%s", doc.getObjectGuid(), newVersion,
+                file.getOriginalFilename());
 
         storageService.storeFile(fileData, storageKey, file.getContentType());
 
@@ -518,7 +523,8 @@ public class DocumentService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    Thread.startVirtualThread(() -> runAnomalyCheckAsync(versionId, docId, newFileData, origFilename, contentType));
+                    Thread.startVirtualThread(
+                            () -> runAnomalyCheckAsync(versionId, docId, newFileData, origFilename, contentType));
                 }
             });
         }
@@ -530,7 +536,8 @@ public class DocumentService {
         doc.setStorageKey(storageKey);
         doc = documentRepository.save(doc);
 
-        // Release lock via LockService (handles Redis cleanup + DB checkout clear + draft cleanup)
+        // Release lock via LockService (handles Redis cleanup + DB checkout clear +
+        // draft cleanup)
         lockService.releaseLock(documentId, userId);
 
         // Reload doc after lock release
@@ -652,7 +659,8 @@ public class DocumentService {
     // ============ LEGAL HOLD ============
 
     /**
-     * Re-index all existing documents into Elasticsearch (metadata only, no file content).
+     * Re-index all existing documents into Elasticsearch (metadata only, no file
+     * content).
      * Returns the number of documents queued for indexing.
      */
     @Transactional(readOnly = true)
@@ -716,13 +724,15 @@ public class DocumentService {
         // Collect unique authorIds to resolve names in one query
         Set<UUID> authorIds = new HashSet<>();
         for (DocumentVersion v : versions) {
-            if (v.getAuthorId() != null) authorIds.add(v.getAuthorId());
+            if (v.getAuthorId() != null)
+                authorIds.add(v.getAuthorId());
         }
         Map<UUID, String> authorNames = resolveUserNames(authorIds);
 
         String fileName = buildFileName(doc);
         return versions.stream()
-                .map(v -> mapVersionToDto(v, doc.getId(), fileName, authorNames.getOrDefault(v.getAuthorId(), "Unknown")))
+                .map(v -> mapVersionToDto(v, doc.getId(), fileName,
+                        authorNames.getOrDefault(v.getAuthorId(), "Unknown")))
                 .toList();
     }
 
@@ -745,7 +755,7 @@ public class DocumentService {
 
     @Transactional
     public DocumentDto copyVersionToProject(UUID documentId, int versionNumber,
-                                             CopyVersionToProjectRequest request, UUID userId) throws Exception {
+            CopyVersionToProjectRequest request, UUID userId) throws Exception {
         Document sourceDoc = findDocumentOrThrow(documentId);
         DocumentVersion sourceVersion = versionRepository.findByDocumentIdAndVersionNumber(documentId, versionNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("Version", "number", versionNumber));
@@ -755,7 +765,8 @@ public class DocumentService {
         String sha256 = storageService.calculateSha256(fileData);
 
         String title = (request.getTitle() != null && !request.getTitle().isBlank())
-                ? request.getTitle() : sourceDoc.getTitle();
+                ? request.getTitle()
+                : sourceDoc.getTitle();
         String objectGuid = UUID.randomUUID().toString().replace("-", "");
         String fileName = buildFileName(sourceDoc);
         String storageKey = String.format("documents/%s/v1/%s", objectGuid, fileName);
@@ -769,9 +780,9 @@ public class DocumentService {
 
         try {
             Map<String, Object> project = jdbcTemplate.queryForMap(
-                "SELECT default_retention_period_years, privacy_redaction_enabled, " +
-                "jurisdiction_code FROM projects WHERE id = ?",
-                request.getTargetProjectId());
+                    "SELECT default_retention_period_years, privacy_redaction_enabled, " +
+                            "jurisdiction_code FROM projects WHERE id = ?",
+                    request.getTargetProjectId());
 
             Integer projectRetention = (Integer) project.get("default_retention_period_years");
             if (projectRetention != null && projectRetention > retentionYears) {
@@ -785,9 +796,9 @@ public class DocumentService {
             if (jurisdictionCode != null && !jurisdictionCode.isBlank()) {
                 try {
                     Integer minRetention = jdbcTemplate.queryForObject(
-                        "SELECT MAX(jrr.min_retention_years) FROM jurisdiction_retention_rules jrr " +
-                        "JOIN jurisdictions j ON jrr.jurisdiction_id = j.id WHERE j.code = ?",
-                        Integer.class, jurisdictionCode);
+                            "SELECT MAX(jrr.min_retention_years) FROM jurisdiction_retention_rules jrr " +
+                                    "JOIN jurisdictions j ON jrr.jurisdiction_id = j.id WHERE j.code = ?",
+                            Integer.class, jurisdictionCode);
                     if (minRetention != null && minRetention > retentionYears) {
                         retentionYears = minRetention;
                     }
@@ -812,7 +823,8 @@ public class DocumentService {
                 .storageKey(storageKey)
                 .authorId(userId)
                 .tags(sourceDoc.getTags())
-                .metadataJson(sourceDoc.getMetadataJson() != null ? new HashMap<>(sourceDoc.getMetadataJson()) : new HashMap<>())
+                .metadataJson(sourceDoc.getMetadataJson() != null ? new HashMap<>(sourceDoc.getMetadataJson())
+                        : new HashMap<>())
                 .retentionPeriodYears(retentionYears)
                 .retentionStartDate(Instant.now())
                 .privacyRedactionEnabled(privacyRedaction)
@@ -851,7 +863,8 @@ public class DocumentService {
     // ============ HELPERS ============
 
     /**
-     * Pre-check a file before check-in: duplicate hash, format mismatch, similarity score.
+     * Pre-check a file before check-in: duplicate hash, format mismatch, similarity
+     * score.
      */
     @Transactional(readOnly = true)
     public VersionPreCheckResult preCheckVersion(UUID documentId, MultipartFile file) throws Exception {
@@ -869,7 +882,8 @@ public class DocumentService {
         List<DocumentVersion> hashMatches = versionRepository.findBySha256Hash(sha256);
         for (DocumentVersion match : hashMatches) {
             // Skip versions belonging to this same document
-            if (match.getDocument().getId().equals(documentId)) continue;
+            if (match.getDocument().getId().equals(documentId))
+                continue;
             duplicateFound = true;
             duplicateDocId = match.getDocument().getId();
             duplicateDocTitle = match.getDocument().getTitle();
@@ -907,7 +921,8 @@ public class DocumentService {
 
                     if (result != null) {
                         similarityScore = result.similarityScore() != null
-                                ? result.similarityScore().doubleValue() : null;
+                                ? result.similarityScore().doubleValue()
+                                : null;
                         if (similarityScore != null && similarityScore < 0.20) {
                             highRisk = true;
                             warnings.add(String.format(
@@ -966,8 +981,7 @@ public class DocumentService {
                 "version1", String.valueOf(version1),
                 "version2", String.valueOf(version2),
                 "text1", v1Text != null ? v1Text : "(No extractable text)",
-                "text2", v2Text != null ? v2Text : "(No extractable text)"
-        );
+                "text2", v2Text != null ? v2Text : "(No extractable text)");
     }
 
     private String extractTextViaSearchService(byte[] fileData, String filename) {
@@ -980,7 +994,8 @@ public class DocumentService {
     }
 
     private String humanMimeType(String mime) {
-        if (mime == null) return "Unknown";
+        if (mime == null)
+            return "Unknown";
         return switch (mime) {
             case "application/pdf" -> "PDF";
             case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "Word (.docx)";
@@ -997,13 +1012,15 @@ public class DocumentService {
     }
 
     /**
-     * Run AI-powered anomaly detection comparing new version against previous version.
-     * Retrieves the previous version file from storage, sends both to the search service
+     * Run AI-powered anomaly detection comparing new version against previous
+     * version.
+     * Retrieves the previous version file from storage, sends both to the search
+     * service
      * for content comparison, and stores the result on the version record.
      */
     @Transactional
     private void runAnomalyCheckAsync(UUID versionId, UUID docId, byte[] newFileData,
-                                       String newFileName, String newMimeType) {
+            String newFileName, String newMimeType) {
         try {
             log.info("Starting async anomaly check for version {} of doc {}", versionId, docId);
             DocumentVersion version = versionRepository.findById(versionId).orElse(null);
@@ -1020,16 +1037,18 @@ public class DocumentService {
     }
 
     private void runAnomalyCheck(DocumentVersion version, Document doc, byte[] newFileData,
-                                  String newFileName, String newMimeType) {
+            String newFileName, String newMimeType) {
         try {
             // Find previous version
             Optional<DocumentVersion> prevVersionOpt = versionRepository
                     .findByDocumentIdAndVersionNumber(doc.getId(), version.getVersionNumber() - 1);
-            if (prevVersionOpt.isEmpty()) return;
+            if (prevVersionOpt.isEmpty())
+                return;
 
             DocumentVersion prevVersion = prevVersionOpt.get();
             byte[] prevFileData = storageService.retrieveFile(prevVersion.getStorageKey());
-            if (prevFileData == null || prevFileData.length == 0) return;
+            if (prevFileData == null || prevFileData.length == 0)
+                return;
 
             String prevFileName = buildFileName(doc);
 
@@ -1076,7 +1095,8 @@ public class DocumentService {
     }
 
     private String getFileExtension(String filename) {
-        if (filename == null) return "";
+        if (filename == null)
+            return "";
         int idx = filename.lastIndexOf('.');
         return idx > 0 ? filename.substring(idx + 1).toLowerCase() : "";
     }
@@ -1085,8 +1105,10 @@ public class DocumentService {
         // Resolve author name
         String authorName = resolveUserName(doc.getAuthorId());
         // Resolve checked-out-by name if applicable
-        String checkedOutByName = (doc.getIsCheckedOut() != null && doc.getIsCheckedOut() && doc.getCheckedOutBy() != null)
-                ? resolveUserName(doc.getCheckedOutBy()) : null;
+        String checkedOutByName = (doc.getIsCheckedOut() != null && doc.getIsCheckedOut()
+                && doc.getCheckedOutBy() != null)
+                        ? resolveUserName(doc.getCheckedOutBy())
+                        : null;
 
         return DocumentDto.builder()
                 .id(doc.getId())
@@ -1157,7 +1179,8 @@ public class DocumentService {
     }
 
     private String resolveUserName(UUID userId) {
-        if (userId == null) return null;
+        if (userId == null)
+            return null;
         try {
             String name = jdbcTemplate.queryForObject(
                     "SELECT COALESCE(first_name || ' ' || last_name, username) FROM users WHERE id = ?",
@@ -1169,7 +1192,8 @@ public class DocumentService {
     }
 
     private Map<UUID, String> resolveUserNames(Set<UUID> userIds) {
-        if (userIds.isEmpty()) return Collections.emptyMap();
+        if (userIds.isEmpty())
+            return Collections.emptyMap();
         Map<UUID, String> result = new HashMap<>();
         for (UUID uid : userIds) {
             result.put(uid, resolveUserName(uid));

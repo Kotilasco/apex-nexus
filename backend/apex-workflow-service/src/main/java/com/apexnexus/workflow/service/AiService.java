@@ -22,8 +22,17 @@ public class AiService {
     @Value("${ollama.model:llama3.2:1b}")
     private String ollamaModel;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public AiService() {
+        this.restTemplate = new RestTemplate();
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory =
+                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(java.time.Duration.ofSeconds(10));
+        factory.setReadTimeout(java.time.Duration.ofSeconds(180));
+        this.restTemplate.setRequestFactory(factory);
+    }
 
     private static final String SYSTEM_PROMPT = """
         You are an expert workflow designer for an enterprise content management system.
@@ -96,6 +105,76 @@ public class AiService {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * Summarize a document's content using Ollama.
+     */
+    public String summarizeDocument(String documentContent, String documentTitle) {
+        log.info("Generating AI summary for document: {}", documentTitle);
+        String prompt = """
+            You are an expert document analyst. Summarize the following document concisely.
+            Provide a clear, well-structured summary that captures the key points, main topics, and important details.
+            Keep the summary between 3-8 sentences depending on document length.
+            
+            Document Title: %s
+            
+            Document Content:
+            %s
+            
+            Provide ONLY the summary text, no labels or prefixes.
+            """.formatted(documentTitle, truncateContent(documentContent, 4000));
+
+        return callOllama(prompt);
+    }
+
+    /**
+     * Answer a question about a document's content using Ollama.
+     */
+    public String askDocumentQuestion(String documentContent, String documentTitle, String question) {
+        log.info("AI Q&A for document '{}': {}", documentTitle, question);
+        String prompt = """
+            You are a helpful document assistant. Answer the user's question based ONLY on the provided document content.
+            If the answer cannot be found in the document, say "I couldn't find that information in this document."
+            Be concise but thorough in your answer.
+            
+            Document Title: %s
+            
+            Document Content:
+            %s
+            
+            User Question: %s
+            
+            Answer:
+            """.formatted(documentTitle, truncateContent(documentContent, 4000), question);
+
+        return callOllama(prompt);
+    }
+
+    private String callOllama(String prompt) {
+        String url = ollamaHost + "/api/generate";
+        Map<String, Object> body = new HashMap<>();
+        body.put("model", ollamaModel);
+        body.put("prompt", prompt);
+        body.put("stream", false);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+            JsonNode root = objectMapper.readTree(response.getBody());
+            return root.has("response") ? root.get("response").asText().trim() : "No response generated.";
+        } catch (Exception e) {
+            log.error("Ollama call failed: {}", e.getMessage());
+            throw new RuntimeException("AI service unavailable: " + e.getMessage());
+        }
+    }
+
+    private String truncateContent(String content, int maxChars) {
+        if (content == null) return "";
+        return content.length() > maxChars ? content.substring(0, maxChars) + "\n... [content truncated]" : content;
     }
 
     private String extractJson(String text) {

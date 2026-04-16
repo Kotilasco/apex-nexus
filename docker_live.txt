@@ -1,0 +1,25 @@
+apex-web: Exited (137) 42 minutes ago
+apex-auth-service: Up 3 hours
+apex-workflow-service: Up 3 days
+apex-document-service: Up 3 days
+apex-retention-service: Up 3 days
+apex-audit-service: Up 3 days
+apex-search-service: Up 3 days
+apex-notification-service: Up 3 days
+apex-gateway: Up 3 days
+apex-minio-init: Exited (0) 3 days ago
+apex-postgres: Up 3 days (healthy)
+apex-redis: Up 3 days (healthy)
+apex-elasticsearch: Up 3 days (healthy)
+apex-ollama: Up 3 days
+apex-minio: Up 3 days (healthy)
+apex-mailhog: Up 3 days
+ussd-ussd-app-1: Exited (255) 8 days ago
+ussd-redis-1: Exited (255) 8 days ago
+docker-db-explorer: Exited (137) 8 days ago
+fantasy-edge: Exited (255) 13 days ago
+strange_rubin: Created
+construction-erp-db-1: Exited (0) 8 days ago
+harassment_db: Exited (127) 7 weeks ago
+zetdc-email-container: Exited (255) 8 weeks ago
+hopeful_lamarr: Exited (137) 8 weeks ago

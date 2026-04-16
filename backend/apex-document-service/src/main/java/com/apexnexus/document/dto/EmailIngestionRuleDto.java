@@ -5,7 +5,10 @@ import lombok.*;
 import java.time.Instant;
 import java.util.UUID;
 
-@Data @NoArgsConstructor @AllArgsConstructor @Builder
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class EmailIngestionRuleDto {
     private UUID id;
     private UUID configId;

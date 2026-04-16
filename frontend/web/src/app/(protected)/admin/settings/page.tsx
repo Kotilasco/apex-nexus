@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { retentionApi } from '@/lib/api';
+import { useAuthStore } from '@/lib/auth-store';
 import type { RetentionPolicy } from '@/lib/types';
 import { formatDate } from '@/lib/utils';
 import {
@@ -10,6 +11,10 @@ import {
 } from 'lucide-react';
 
 export default function AdminSettingsPage() {
+  const { user: currentUser } = useAuthStore();
+  const userRoles = (currentUser?.roles ?? []).map((r: any) => (typeof r === "string" ? r : r.name).replace(/^ROLE_/, "").toUpperCase());
+  const isAdmin = userRoles.includes("SYSTEM_ADMIN") || userRoles.includes("ADMIN");
+
   const [policies, setPolicies] = useState<RetentionPolicy[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -69,6 +74,18 @@ export default function AdminSettingsPage() {
     { icon: Clock, label: 'Max Retention', value: '20+ years', color: 'text-amber-600' },
     { icon: Globe, label: 'Search Engine', value: 'Elasticsearch 8.12', color: 'text-cyan-600' },
   ];
+
+  if (!isAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Shield className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+          <h2 className="text-lg font-semibold text-slate-700">Access Denied</h2>
+          <p className="text-sm text-slate-400 mt-1">You need SYSTEM_ADMIN or ADMIN role to access this page.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

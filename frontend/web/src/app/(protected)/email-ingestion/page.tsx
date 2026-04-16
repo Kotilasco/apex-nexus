@@ -1,12 +1,27 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback } from 'react';
-import { emailIngestionApi, documentApi, projectApi } from '@/lib/api';
+import { useEffect, useState, useCallback } from "react";
+import { emailIngestionApi, documentApi, projectApi } from "@/lib/api";
 import {
-  Mail, Plus, Trash2, Power, PowerOff, RefreshCw, Play,
-  Settings, Filter, ChevronDown, ChevronUp, X, Check, Pencil,
-  FolderOpen, ChevronRight, Building2, FolderPlus,
-} from 'lucide-react';
+  Mail,
+  Plus,
+  Trash2,
+  Power,
+  PowerOff,
+  RefreshCw,
+  Play,
+  Settings,
+  Filter,
+  ChevronDown,
+  ChevronUp,
+  X,
+  Check,
+  Pencil,
+  FolderOpen,
+  ChevronRight,
+  Building2,
+  FolderPlus
+} from "lucide-react";
 
 interface Rule {
   id: string;
@@ -54,11 +69,23 @@ interface Project {
 }
 
 const RULE_TYPES = [
-  { value: 'FROM_CONTAINS', label: 'From Contains', placeholder: 'e.g. kuda' },
-  { value: 'FROM_EQUALS', label: 'From Equals', placeholder: 'e.g. kuda@example.com' },
-  { value: 'SUBJECT_CONTAINS', label: 'Subject Contains', placeholder: 'e.g. invoice' },
-  { value: 'SUBJECT_EQUALS', label: 'Subject Equals', placeholder: 'e.g. Monthly Report' },
-  { value: 'HAS_ATTACHMENT', label: 'Has Attachment', placeholder: '' },
+  { value: "FROM_CONTAINS", label: "From Contains", placeholder: "e.g. kuda" },
+  {
+    value: "FROM_EQUALS",
+    label: "From Equals",
+    placeholder: "e.g. kuda@example.com"
+  },
+  {
+    value: "SUBJECT_CONTAINS",
+    label: "Subject Contains",
+    placeholder: "e.g. invoice"
+  },
+  {
+    value: "SUBJECT_EQUALS",
+    label: "Subject Equals",
+    placeholder: "e.g. Monthly Report"
+  },
+  { value: "HAS_ATTACHMENT", label: "Has Attachment", placeholder: "" }
 ];
 
 export default function EmailIngestionPage() {
@@ -71,21 +98,43 @@ export default function EmailIngestionPage() {
 
   // New config form
   const [form, setForm] = useState({
-    name: '', protocol: 'IMAP', imapHost: '', imapPort: 993, ewsUrl: '',
-    username: '', password: '', folderName: 'INBOX', useSsl: true, pollInterval: 5,
-    targetFolderId: '' as string, projectId: '' as string,
+    name: "",
+    protocol: "IMAP",
+    imapHost: "",
+    imapPort: 993,
+    ewsUrl: "",
+    username: "",
+    password: "",
+    folderName: "INBOX",
+    useSsl: true,
+    pollInterval: 5,
+    targetFolderId: "" as string,
+    projectId: "" as string
   });
 
   // New rule form
-  const [ruleForm, setRuleForm] = useState({ ruleName: '', ruleType: 'FROM_CONTAINS', ruleValue: '' });
+  const [ruleForm, setRuleForm] = useState({
+    ruleName: "",
+    ruleType: "FROM_CONTAINS",
+    ruleValue: ""
+  });
   const [addingRule, setAddingRule] = useState<string | null>(null);
 
   // Edit config
   const [editingConfig, setEditingConfig] = useState<Config | null>(null);
   const [editForm, setEditForm] = useState({
-    name: '', protocol: 'IMAP', imapHost: '', imapPort: 993, ewsUrl: '',
-    username: '', password: '', folderName: 'INBOX', useSsl: true, pollInterval: 5,
-    targetFolderId: '' as string, projectId: '' as string,
+    name: "",
+    protocol: "IMAP",
+    imapHost: "",
+    imapPort: 993,
+    ewsUrl: "",
+    username: "",
+    password: "",
+    folderName: "INBOX",
+    useSsl: true,
+    pollInterval: 5,
+    targetFolderId: "" as string,
+    projectId: "" as string
   });
 
   // Folder picker
@@ -93,19 +142,21 @@ export default function EmailIngestionPage() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [folderBreadcrumbs, setFolderBreadcrumbs] = useState<Folder[]>([]);
   const [folderLoading, setFolderLoading] = useState(false);
-  const [selectedFolderName, setSelectedFolderName] = useState('');
-  const [selectedProjectName, setSelectedProjectName] = useState('');
+  const [selectedFolderName, setSelectedFolderName] = useState("");
+  const [selectedProjectName, setSelectedProjectName] = useState("");
   const [browsing, setBrowsing] = useState(false);
-  const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderName, setNewFolderName] = useState("");
   const [creatingFolder, setCreatingFolder] = useState(false);
   // For edit modal
   const [editFolders, setEditFolders] = useState<Folder[]>([]);
-  const [editFolderBreadcrumbs, setEditFolderBreadcrumbs] = useState<Folder[]>([]);
+  const [editFolderBreadcrumbs, setEditFolderBreadcrumbs] = useState<Folder[]>(
+    []
+  );
   const [editFolderLoading, setEditFolderLoading] = useState(false);
-  const [editSelectedFolderName, setEditSelectedFolderName] = useState('');
-  const [editSelectedProjectName, setEditSelectedProjectName] = useState('');
+  const [editSelectedFolderName, setEditSelectedFolderName] = useState("");
+  const [editSelectedProjectName, setEditSelectedProjectName] = useState("");
   const [editBrowsing, setEditBrowsing] = useState(false);
-  const [editNewFolderName, setEditNewFolderName] = useState('');
+  const [editNewFolderName, setEditNewFolderName] = useState("");
   const [editCreatingFolder, setEditCreatingFolder] = useState(false);
 
   const load = useCallback(async () => {
@@ -114,40 +165,55 @@ export default function EmailIngestionPage() {
       const res = await emailIngestionApi.getConfigs();
       const data = res.data?.data ?? res.data;
       setConfigs(Array.isArray(data) ? data : []);
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
     try {
       const res = await projectApi.list();
       const data = res.data?.data ?? res.data;
       setProjects(Array.isArray(data) ? data : []);
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
     setLoading(false);
   }, []);
 
-  const loadFolders = async (projectId: string | null, parentId: string | null, target: 'create' | 'edit') => {
-    const setFld = target === 'create' ? setFolders : setEditFolders;
-    const setLd = target === 'create' ? setFolderLoading : setEditFolderLoading;
-    const setBr = target === 'create' ? setBrowsing : setEditBrowsing;
+  const loadFolders = async (
+    projectId: string | null,
+    parentId: string | null,
+    target: "create" | "edit"
+  ) => {
+    const setFld = target === "create" ? setFolders : setEditFolders;
+    const setLd = target === "create" ? setFolderLoading : setEditFolderLoading;
+    const setBr = target === "create" ? setBrowsing : setEditBrowsing;
     setBr(true);
     setLd(true);
     try {
       let res;
       if (projectId) {
-        res = await documentApi.getFoldersByProject(projectId, parentId || undefined);
+        res = await documentApi.getFoldersByProject(
+          projectId,
+          parentId || undefined
+        );
       } else {
         res = await documentApi.getFolders(parentId || undefined);
       }
       const data = res.data?.data ?? res.data;
       setFld(Array.isArray(data) ? data : []);
-    } catch { setFld([]); }
+    } catch {
+      setFld([]);
+    }
     setLd(false);
   };
 
-  const createNewFolder = async (target: 'create' | 'edit') => {
-    const name = target === 'create' ? newFolderName : editNewFolderName;
-    const bc = target === 'create' ? folderBreadcrumbs : editFolderBreadcrumbs;
-    const projId = target === 'create' ? form.projectId : editForm.projectId;
-    const setCreating = target === 'create' ? setCreatingFolder : setEditCreatingFolder;
-    const setName = target === 'create' ? setNewFolderName : setEditNewFolderName;
+  const createNewFolder = async (target: "create" | "edit") => {
+    const name = target === "create" ? newFolderName : editNewFolderName;
+    const bc = target === "create" ? folderBreadcrumbs : editFolderBreadcrumbs;
+    const projId = target === "create" ? form.projectId : editForm.projectId;
+    const setCreating =
+      target === "create" ? setCreatingFolder : setEditCreatingFolder;
+    const setName =
+      target === "create" ? setNewFolderName : setEditNewFolderName;
     if (!name.trim()) return;
     setCreating(true);
     try {
@@ -155,25 +221,29 @@ export default function EmailIngestionPage() {
       await documentApi.createFolder({
         name: name.trim(),
         parentId,
-        projectId: projId || undefined,
+        projectId: projId || undefined
       });
-      setName('');
+      setName("");
       await loadFolders(projId || null, parentId || null, target);
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
     setCreating(false);
   };
 
-  const navigateFolder = (folder: Folder, target: 'create' | 'edit') => {
-    const setBc = target === 'create' ? setFolderBreadcrumbs : setEditFolderBreadcrumbs;
-    setBc(prev => [...prev, folder]);
-    const projId = target === 'create' ? form.projectId : editForm.projectId;
+  const navigateFolder = (folder: Folder, target: "create" | "edit") => {
+    const setBc =
+      target === "create" ? setFolderBreadcrumbs : setEditFolderBreadcrumbs;
+    setBc((prev) => [...prev, folder]);
+    const projId = target === "create" ? form.projectId : editForm.projectId;
     loadFolders(projId || null, folder.id, target);
   };
 
-  const navigateBreadcrumb = (index: number, target: 'create' | 'edit') => {
-    const bc = target === 'create' ? folderBreadcrumbs : editFolderBreadcrumbs;
-    const setBc = target === 'create' ? setFolderBreadcrumbs : setEditFolderBreadcrumbs;
-    const projId = target === 'create' ? form.projectId : editForm.projectId;
+  const navigateBreadcrumb = (index: number, target: "create" | "edit") => {
+    const bc = target === "create" ? folderBreadcrumbs : editFolderBreadcrumbs;
+    const setBc =
+      target === "create" ? setFolderBreadcrumbs : setEditFolderBreadcrumbs;
+    const projId = target === "create" ? form.projectId : editForm.projectId;
     if (index < 0) {
       setBc([]);
       loadFolders(projId || null, null, target);
@@ -184,82 +254,111 @@ export default function EmailIngestionPage() {
     }
   };
 
-  const selectFolder = (folder: Folder, target: 'create' | 'edit') => {
-    if (target === 'create') {
-      setForm(f => ({ ...f, targetFolderId: folder.id }));
+  const selectFolder = (folder: Folder, target: "create" | "edit") => {
+    if (target === "create") {
+      setForm((f) => ({ ...f, targetFolderId: folder.id }));
       setSelectedFolderName(folder.path || folder.name);
       setBrowsing(false);
     } else {
-      setEditForm(f => ({ ...f, targetFolderId: folder.id }));
+      setEditForm((f) => ({ ...f, targetFolderId: folder.id }));
       setEditSelectedFolderName(folder.path || folder.name);
       setEditBrowsing(false);
     }
   };
 
-  const clearFolder = (target: 'create' | 'edit') => {
-    if (target === 'create') {
-      setForm(f => ({ ...f, targetFolderId: '' }));
-      setSelectedFolderName('');
+  const clearFolder = (target: "create" | "edit") => {
+    if (target === "create") {
+      setForm((f) => ({ ...f, targetFolderId: "" }));
+      setSelectedFolderName("");
       setFolders([]);
       setBrowsing(false);
     } else {
-      setEditForm(f => ({ ...f, targetFolderId: '' }));
-      setEditSelectedFolderName('');
+      setEditForm((f) => ({ ...f, targetFolderId: "" }));
+      setEditSelectedFolderName("");
       setEditFolders([]);
       setEditBrowsing(false);
     }
   };
 
-  const handleProjectChange = (projId: string, target: 'create' | 'edit') => {
-    if (target === 'create') {
-      setForm(f => ({ ...f, projectId: projId, targetFolderId: '' }));
-      setSelectedFolderName('');
-      setSelectedProjectName(projects.find(p => p.id === projId)?.name || '');
+  const handleProjectChange = (projId: string, target: "create" | "edit") => {
+    if (target === "create") {
+      setForm((f) => ({ ...f, projectId: projId, targetFolderId: "" }));
+      setSelectedFolderName("");
+      setSelectedProjectName(projects.find((p) => p.id === projId)?.name || "");
       setFolderBreadcrumbs([]);
       setFolders([]);
       setBrowsing(false);
-      setNewFolderName('');
+      setNewFolderName("");
     } else {
-      setEditForm(f => ({ ...f, projectId: projId, targetFolderId: '' }));
-      setEditSelectedFolderName('');
-      setEditSelectedProjectName(projects.find(p => p.id === projId)?.name || '');
+      setEditForm((f) => ({ ...f, projectId: projId, targetFolderId: "" }));
+      setEditSelectedFolderName("");
+      setEditSelectedProjectName(
+        projects.find((p) => p.id === projId)?.name || ""
+      );
       setEditFolderBreadcrumbs([]);
       setEditFolders([]);
       setEditBrowsing(false);
-      setEditNewFolderName('');
+      setEditNewFolderName("");
     }
   };
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleCreateConfig = async () => {
     if (!form.name || !form.username || !form.password) return;
-    if (form.protocol === 'IMAP' && !form.imapHost) return;
-    if (form.protocol === 'EWS' && !form.ewsUrl) return;
+    if (form.protocol === "IMAP" && !form.imapHost) return;
+    if (form.protocol === "EWS" && !form.ewsUrl) return;
     try {
       const payload: any = { ...form };
       if (!payload.targetFolderId) delete payload.targetFolderId;
       if (!payload.projectId) delete payload.projectId;
       await emailIngestionApi.createConfig(payload);
       setShowCreate(false);
-      setForm({ name: '', protocol: 'IMAP', imapHost: '', imapPort: 993, ewsUrl: '', username: '', password: '', folderName: 'INBOX', useSsl: true, pollInterval: 5, targetFolderId: '', projectId: '' });
-      setSelectedFolderName('');
-      setSelectedProjectName('');
+      setForm({
+        name: "",
+        protocol: "IMAP",
+        imapHost: "",
+        imapPort: 993,
+        ewsUrl: "",
+        username: "",
+        password: "",
+        folderName: "INBOX",
+        useSsl: true,
+        pollInterval: 5,
+        targetFolderId: "",
+        projectId: ""
+      });
+      setSelectedFolderName("");
+      setSelectedProjectName("");
       setFolders([]);
       setFolderBreadcrumbs([]);
       setBrowsing(false);
-      setNewFolderName('');
+      setNewFolderName("");
       load();
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   };
 
   const handleToggleConfig = async (id: string) => {
-    try { await emailIngestionApi.toggleConfig(id); load(); } catch { /* silent */ }
+    try {
+      await emailIngestionApi.toggleConfig(id);
+      load();
+    } catch {
+      /* silent */
+    }
   };
 
   const handleDeleteConfig = async (id: string) => {
-    if (!confirm('Delete this email configuration and all its rules?')) return;
-    try { await emailIngestionApi.deleteConfig(id); load(); } catch { /* silent */ }
+    if (!confirm("Delete this email configuration and all its rules?")) return;
+    try {
+      await emailIngestionApi.deleteConfig(id);
+      load();
+    } catch {
+      /* silent */
+    }
   };
 
   const handlePollNow = async (id: string) => {
@@ -270,7 +369,9 @@ export default function EmailIngestionPage() {
       const data = res.data?.data ?? res.data;
       setPollResult(`Ingested ${data.documentsIngested} document(s)`);
     } catch (err: any) {
-      setPollResult('Poll failed: ' + (err?.response?.data?.message || err.message));
+      setPollResult(
+        "Poll failed: " + (err?.response?.data?.message || err.message)
+      );
     }
     setPolling(null);
     load();
@@ -281,42 +382,64 @@ export default function EmailIngestionPage() {
     try {
       await emailIngestionApi.addRule(configId, ruleForm);
       setAddingRule(null);
-      setRuleForm({ ruleName: '', ruleType: 'FROM_CONTAINS', ruleValue: '' });
+      setRuleForm({ ruleName: "", ruleType: "FROM_CONTAINS", ruleValue: "" });
       load();
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   };
 
   const handleToggleRule = async (ruleId: string) => {
-    try { await emailIngestionApi.toggleRule(ruleId); load(); } catch { /* silent */ }
+    try {
+      await emailIngestionApi.toggleRule(ruleId);
+      load();
+    } catch {
+      /* silent */
+    }
   };
 
   const handleDeleteRule = async (ruleId: string) => {
-    try { await emailIngestionApi.deleteRule(ruleId); load(); } catch { /* silent */ }
+    try {
+      await emailIngestionApi.deleteRule(ruleId);
+      load();
+    } catch {
+      /* silent */
+    }
   };
 
   const startEditing = (cfg: Config) => {
     setEditingConfig(cfg);
     setEditForm({
-      name: cfg.name, protocol: cfg.protocol || 'IMAP',
-      imapHost: cfg.imapHost || '', imapPort: cfg.imapPort || 993,
-      ewsUrl: cfg.ewsUrl || '', username: cfg.username || '',
-      password: '', folderName: cfg.folderName || 'INBOX',
-      useSsl: cfg.useSsl ?? true, pollInterval: cfg.pollInterval || 5,
-      targetFolderId: cfg.targetFolderId || '', projectId: cfg.projectId || '',
+      name: cfg.name,
+      protocol: cfg.protocol || "IMAP",
+      imapHost: cfg.imapHost || "",
+      imapPort: cfg.imapPort || 993,
+      ewsUrl: cfg.ewsUrl || "",
+      username: cfg.username || "",
+      password: "",
+      folderName: cfg.folderName || "INBOX",
+      useSsl: cfg.useSsl ?? true,
+      pollInterval: cfg.pollInterval || 5,
+      targetFolderId: cfg.targetFolderId || "",
+      projectId: cfg.projectId || ""
     });
-    setEditSelectedProjectName(cfg.projectId ? (projects.find(p => p.id === cfg.projectId)?.name || '') : '');
-    setEditSelectedFolderName('');
+    setEditSelectedProjectName(
+      cfg.projectId
+        ? projects.find((p) => p.id === cfg.projectId)?.name || ""
+        : ""
+    );
+    setEditSelectedFolderName("");
     setEditFolderBreadcrumbs([]);
     setEditFolders([]);
     setEditBrowsing(false);
-    setEditNewFolderName('');
+    setEditNewFolderName("");
   };
 
   const handleUpdateConfig = async () => {
     if (!editingConfig) return;
     if (!editForm.name || !editForm.username) return;
-    if (editForm.protocol === 'IMAP' && !editForm.imapHost) return;
-    if (editForm.protocol === 'EWS' && !editForm.ewsUrl) return;
+    if (editForm.protocol === "IMAP" && !editForm.imapHost) return;
+    if (editForm.protocol === "EWS" && !editForm.ewsUrl) return;
     try {
       const payload: any = { ...editForm };
       if (!payload.password) delete payload.password;
@@ -325,7 +448,9 @@ export default function EmailIngestionPage() {
       await emailIngestionApi.updateConfig(editingConfig.id, payload);
       setEditingConfig(null);
       load();
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   };
 
   return (
@@ -337,14 +462,22 @@ export default function EmailIngestionPage() {
             <Mail className="h-6 w-6 text-blue-600" /> Email Ingestion
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Automatically import documents from email. Set up IMAP or Exchange (EWS) connections and define rules to filter which emails get ingested.
+            Automatically import documents from email. Set up IMAP or Exchange
+            (EWS) connections and define rules to filter which emails get
+            ingested.
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={load} className="px-3 py-2 text-sm border rounded-lg hover:bg-slate-50 flex items-center gap-1">
+          <button
+            onClick={load}
+            className="px-3 py-2 text-sm border rounded-lg hover:bg-slate-50 flex items-center gap-1"
+          >
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
-          <button onClick={() => setShowCreate(true)} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1">
+          <button
+            onClick={() => setShowCreate(true)}
+            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1"
+          >
             <Plus className="h-4 w-4" /> Add Mailbox
           </button>
         </div>
@@ -354,7 +487,9 @@ export default function EmailIngestionPage() {
       {pollResult && (
         <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg flex justify-between items-center">
           <span>{pollResult}</span>
-          <button onClick={() => setPollResult(null)}><X className="h-4 w-4" /></button>
+          <button onClick={() => setPollResult(null)}>
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
@@ -363,73 +498,165 @@ export default function EmailIngestionPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4 space-y-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Settings className="h-5 w-5 text-blue-600" /> New Email Connection
+              <Settings className="h-5 w-5 text-blue-600" /> New Email
+              Connection
             </h2>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1">Connection Name</label>
-                <input value={form.name} onChange={e => setForm({...form, name: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="e.g. Work Exchange" />
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Connection Name
+                </label>
+                <input
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  placeholder="e.g. Work Exchange"
+                />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1">Protocol</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Protocol
+                </label>
                 <div className="flex gap-4">
-                  {['IMAP', 'EWS'].map(p => (
-                    <label key={p} className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="protocol" value={p} checked={form.protocol === p}
-                        onChange={e => setForm({...form, protocol: e.target.value})}
-                        className="accent-blue-600" />
-                      <span className="text-sm font-medium text-slate-700">{p === 'EWS' ? 'Exchange (EWS)' : 'IMAP'}</span>
+                  {["IMAP", "EWS"].map((p) => (
+                    <label
+                      key={p}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <input
+                        type="radio"
+                        name="protocol"
+                        value={p}
+                        checked={form.protocol === p}
+                        onChange={(e) =>
+                          setForm({ ...form, protocol: e.target.value })
+                        }
+                        className="accent-blue-600"
+                      />
+                      <span className="text-sm font-medium text-slate-700">
+                        {p === "EWS" ? "Exchange (EWS)" : "IMAP"}
+                      </span>
                     </label>
                   ))}
                 </div>
               </div>
-              {form.protocol === 'IMAP' ? (
+              {form.protocol === "IMAP" ? (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">IMAP Host</label>
-                    <input value={form.imapHost} onChange={e => setForm({...form, imapHost: e.target.value})}
-                      className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="imap.gmail.com" />
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      IMAP Host
+                    </label>
+                    <input
+                      value={form.imapHost}
+                      onChange={(e) =>
+                        setForm({ ...form, imapHost: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border rounded-lg text-sm"
+                      placeholder="imap.gmail.com"
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Port</label>
-                    <input type="number" value={form.imapPort} onChange={e => setForm({...form, imapPort: parseInt(e.target.value)})}
-                      className="w-full px-3 py-2 border rounded-lg text-sm" />
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Port
+                    </label>
+                    <input
+                      type="number"
+                      value={form.imapPort}
+                      onChange={(e) =>
+                        setForm({ ...form, imapPort: parseInt(e.target.value) })
+                      }
+                      className="w-full px-3 py-2 border rounded-lg text-sm"
+                    />
                   </div>
                 </>
               ) : (
                 <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">EWS URL</label>
-                  <input value={form.ewsUrl} onChange={e => setForm({...form, ewsUrl: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="https://mail.example.com/EWS/Exchange.asmx" />
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    EWS URL
+                  </label>
+                  <input
+                    value={form.ewsUrl}
+                    onChange={(e) =>
+                      setForm({ ...form, ewsUrl: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    placeholder="https://mail.example.com/EWS/Exchange.asmx"
+                  />
                 </div>
               )}
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Username / Email</label>
-                <input value={form.username} onChange={e => setForm({...form, username: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg text-sm" placeholder={form.protocol === 'EWS' ? 'DOMAIN\\user or user@domain' : 'you@gmail.com'} />
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Username / Email
+                </label>
+                <input
+                  value={form.username}
+                  onChange={(e) =>
+                    setForm({ ...form, username: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  placeholder={
+                    form.protocol === "EWS"
+                      ? "DOMAIN\\user or user@domain"
+                      : "you@gmail.com"
+                  }
+                />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Password / App Password</label>
-                <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="••••••••" />
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Password / App Password
+                </label>
+                <input
+                  type="password"
+                  value={form.password}
+                  onChange={(e) =>
+                    setForm({ ...form, password: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  placeholder="••••••••"
+                />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Folder</label>
-                <input value={form.folderName} onChange={e => setForm({...form, folderName: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg text-sm" />
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Folder
+                </label>
+                <input
+                  value={form.folderName}
+                  onChange={(e) =>
+                    setForm({ ...form, folderName: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Poll Interval (min)</label>
-                <input type="number" value={form.pollInterval} onChange={e => setForm({...form, pollInterval: parseInt(e.target.value)})}
-                  className="w-full px-3 py-2 border rounded-lg text-sm" min={1} max={60} />
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Poll Interval (min)
+                </label>
+                <input
+                  type="number"
+                  value={form.pollInterval}
+                  onChange={(e) =>
+                    setForm({ ...form, pollInterval: parseInt(e.target.value) })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  min={1}
+                  max={60}
+                />
               </div>
-              {form.protocol === 'IMAP' && (
+              {form.protocol === "IMAP" && (
                 <div className="col-span-2 flex items-center gap-2">
-                  <input type="checkbox" checked={form.useSsl} onChange={e => setForm({...form, useSsl: e.target.checked})}
-                    className="rounded" id="ssl" />
-                  <label htmlFor="ssl" className="text-sm text-slate-700">Use SSL/TLS</label>
+                  <input
+                    type="checkbox"
+                    checked={form.useSsl}
+                    onChange={(e) =>
+                      setForm({ ...form, useSsl: e.target.checked })
+                    }
+                    className="rounded"
+                    id="ssl"
+                  />
+                  <label htmlFor="ssl" className="text-sm text-slate-700">
+                    Use SSL/TLS
+                  </label>
                 </div>
               )}
 
@@ -440,25 +667,42 @@ export default function EmailIngestionPage() {
                 </label>
                 <div className="space-y-2">
                   <div>
-                    <label className="block text-xs text-slate-500 mb-0.5">Project (optional)</label>
+                    <label className="block text-xs text-slate-500 mb-0.5">
+                      Project (optional)
+                    </label>
                     <select
                       value={form.projectId}
-                      onChange={e => handleProjectChange(e.target.value, 'create')}
+                      onChange={(e) =>
+                        handleProjectChange(e.target.value, "create")
+                      }
                       className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
                     >
                       <option value="">No project (root folders)</option>
-                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   {form.targetFolderId ? (
                     <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
                       <FolderOpen className="h-4 w-4 text-blue-600 shrink-0" />
-                      <span className="text-sm text-blue-800 truncate flex-1">{selectedFolderName || form.targetFolderId}</span>
-                      <button onClick={() => clearFolder('create')} className="text-blue-400 hover:text-blue-600"><X className="h-3.5 w-3.5" /></button>
+                      <span className="text-sm text-blue-800 truncate flex-1">
+                        {selectedFolderName || form.targetFolderId}
+                      </span>
+                      <button
+                        onClick={() => clearFolder("create")}
+                        className="text-blue-400 hover:text-blue-600"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   ) : (
                     <button
-                      onClick={() => loadFolders(form.projectId || null, null, 'create')}
+                      onClick={() =>
+                        loadFolders(form.projectId || null, null, "create")
+                      }
                       className="w-full px-3 py-2 border border-dashed rounded-lg text-sm text-slate-500 hover:bg-slate-50 flex items-center gap-1 justify-center"
                     >
                       <FolderOpen className="h-4 w-4" /> Browse Folders
@@ -468,25 +712,52 @@ export default function EmailIngestionPage() {
                     <div className="border rounded-lg overflow-hidden">
                       {/* Breadcrumbs */}
                       <div className="bg-slate-50 px-3 py-1.5 text-xs flex items-center gap-1 flex-wrap border-b">
-                        <button onClick={() => navigateBreadcrumb(-1, 'create')} className="text-blue-600 hover:underline">Root</button>
+                        <button
+                          onClick={() => navigateBreadcrumb(-1, "create")}
+                          className="text-blue-600 hover:underline"
+                        >
+                          Root
+                        </button>
                         {folderBreadcrumbs.map((bc, i) => (
                           <span key={bc.id} className="flex items-center gap-1">
                             <ChevronRight className="h-3 w-3 text-slate-400" />
-                            <button onClick={() => navigateBreadcrumb(i, 'create')} className="text-blue-600 hover:underline">{bc.name}</button>
+                            <button
+                              onClick={() => navigateBreadcrumb(i, "create")}
+                              className="text-blue-600 hover:underline"
+                            >
+                              {bc.name}
+                            </button>
                           </span>
                         ))}
                       </div>
                       <div className="max-h-48 overflow-y-auto">
                         {folderLoading ? (
-                          <div className="text-center py-4 text-xs text-slate-400">Loading folders...</div>
+                          <div className="text-center py-4 text-xs text-slate-400">
+                            Loading folders...
+                          </div>
                         ) : folders.length === 0 ? (
-                          <div className="text-center py-4 text-xs text-slate-400">No folders here. Create one below.</div>
+                          <div className="text-center py-4 text-xs text-slate-400">
+                            No folders here. Create one below.
+                          </div>
                         ) : (
-                          folders.map(f => (
-                            <div key={f.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 border-b last:border-b-0">
+                          folders.map((f) => (
+                            <div
+                              key={f.id}
+                              className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 border-b last:border-b-0"
+                            >
                               <FolderOpen className="h-4 w-4 text-amber-500 shrink-0" />
-                              <button onClick={() => selectFolder(f, 'create')} className="text-sm text-slate-700 hover:text-blue-600 flex-1 text-left truncate">{f.name}</button>
-                              <button onClick={() => navigateFolder(f, 'create')} className="text-xs text-slate-400 hover:text-slate-600 p-1"><ChevronRight className="h-3 w-3" /></button>
+                              <button
+                                onClick={() => selectFolder(f, "create")}
+                                className="text-sm text-slate-700 hover:text-blue-600 flex-1 text-left truncate"
+                              >
+                                {f.name}
+                              </button>
+                              <button
+                                onClick={() => navigateFolder(f, "create")}
+                                className="text-xs text-slate-400 hover:text-slate-600 p-1"
+                              >
+                                <ChevronRight className="h-3 w-3" />
+                              </button>
                             </div>
                           ))
                         )}
@@ -496,17 +767,19 @@ export default function EmailIngestionPage() {
                         <FolderPlus className="h-4 w-4 text-slate-400 shrink-0" />
                         <input
                           value={newFolderName}
-                          onChange={e => setNewFolderName(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && createNewFolder('create')}
+                          onChange={(e) => setNewFolderName(e.target.value)}
+                          onKeyDown={(e) =>
+                            e.key === "Enter" && createNewFolder("create")
+                          }
                           className="flex-1 px-2 py-1 border rounded text-sm"
                           placeholder="New folder name..."
                         />
                         <button
-                          onClick={() => createNewFolder('create')}
+                          onClick={() => createNewFolder("create")}
                           disabled={!newFolderName.trim() || creatingFolder}
                           className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
                         >
-                          {creatingFolder ? '...' : 'Create'}
+                          {creatingFolder ? "..." : "Create"}
                         </button>
                       </div>
                     </div>
@@ -516,9 +789,16 @@ export default function EmailIngestionPage() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
-              <button onClick={handleCreateConfig}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <button
+                onClick={() => setShowCreate(false)}
+                className="px-4 py-2 text-sm border rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateConfig}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
                 Create Connection
               </button>
             </div>
@@ -536,68 +816,162 @@ export default function EmailIngestionPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1">Connection Name</label>
-                <input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg text-sm" />
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Connection Name
+                </label>
+                <input
+                  value={editForm.name}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, name: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1">Protocol</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Protocol
+                </label>
                 <div className="flex gap-4">
-                  {['IMAP', 'EWS'].map(p => (
-                    <label key={p} className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="editProtocol" value={p} checked={editForm.protocol === p}
-                        onChange={e => setEditForm({...editForm, protocol: e.target.value})}
-                        className="accent-blue-600" />
-                      <span className="text-sm font-medium text-slate-700">{p === 'EWS' ? 'Exchange (EWS)' : 'IMAP'}</span>
+                  {["IMAP", "EWS"].map((p) => (
+                    <label
+                      key={p}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <input
+                        type="radio"
+                        name="editProtocol"
+                        value={p}
+                        checked={editForm.protocol === p}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, protocol: e.target.value })
+                        }
+                        className="accent-blue-600"
+                      />
+                      <span className="text-sm font-medium text-slate-700">
+                        {p === "EWS" ? "Exchange (EWS)" : "IMAP"}
+                      </span>
                     </label>
                   ))}
                 </div>
               </div>
-              {editForm.protocol === 'IMAP' ? (
+              {editForm.protocol === "IMAP" ? (
                 <>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">IMAP Host</label>
-                    <input value={editForm.imapHost} onChange={e => setEditForm({...editForm, imapHost: e.target.value})}
-                      className="w-full px-3 py-2 border rounded-lg text-sm" />
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      IMAP Host
+                    </label>
+                    <input
+                      value={editForm.imapHost}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, imapHost: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border rounded-lg text-sm"
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">Port</label>
-                    <input type="number" value={editForm.imapPort} onChange={e => setEditForm({...editForm, imapPort: parseInt(e.target.value)})}
-                      className="w-full px-3 py-2 border rounded-lg text-sm" />
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Port
+                    </label>
+                    <input
+                      type="number"
+                      value={editForm.imapPort}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          imapPort: parseInt(e.target.value)
+                        })
+                      }
+                      className="w-full px-3 py-2 border rounded-lg text-sm"
+                    />
                   </div>
                 </>
               ) : (
                 <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">EWS URL</label>
-                  <input value={editForm.ewsUrl} onChange={e => setEditForm({...editForm, ewsUrl: e.target.value})}
-                    className="w-full px-3 py-2 border rounded-lg text-sm" />
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    EWS URL
+                  </label>
+                  <input
+                    value={editForm.ewsUrl}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, ewsUrl: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                  />
                 </div>
               )}
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Username / Email</label>
-                <input value={editForm.username} onChange={e => setEditForm({...editForm, username: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg text-sm" />
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Username / Email
+                </label>
+                <input
+                  value={editForm.username}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, username: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Password <span className="text-slate-400 font-normal">(leave blank to keep current)</span></label>
-                <input type="password" value={editForm.password} onChange={e => setEditForm({...editForm, password: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="••••••••" />
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Password{" "}
+                  <span className="text-slate-400 font-normal">
+                    (leave blank to keep current)
+                  </span>
+                </label>
+                <input
+                  type="password"
+                  value={editForm.password}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, password: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  placeholder="••••••••"
+                />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Folder</label>
-                <input value={editForm.folderName} onChange={e => setEditForm({...editForm, folderName: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-lg text-sm" />
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Folder
+                </label>
+                <input
+                  value={editForm.folderName}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, folderName: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Poll Interval (min)</label>
-                <input type="number" value={editForm.pollInterval} onChange={e => setEditForm({...editForm, pollInterval: parseInt(e.target.value)})}
-                  className="w-full px-3 py-2 border rounded-lg text-sm" min={1} max={60} />
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Poll Interval (min)
+                </label>
+                <input
+                  type="number"
+                  value={editForm.pollInterval}
+                  onChange={(e) =>
+                    setEditForm({
+                      ...editForm,
+                      pollInterval: parseInt(e.target.value)
+                    })
+                  }
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  min={1}
+                  max={60}
+                />
               </div>
-              {editForm.protocol === 'IMAP' && (
+              {editForm.protocol === "IMAP" && (
                 <div className="col-span-2 flex items-center gap-2">
-                  <input type="checkbox" checked={editForm.useSsl} onChange={e => setEditForm({...editForm, useSsl: e.target.checked})}
-                    className="rounded" id="editSsl" />
-                  <label htmlFor="editSsl" className="text-sm text-slate-700">Use SSL/TLS</label>
+                  <input
+                    type="checkbox"
+                    checked={editForm.useSsl}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, useSsl: e.target.checked })
+                    }
+                    className="rounded"
+                    id="editSsl"
+                  />
+                  <label htmlFor="editSsl" className="text-sm text-slate-700">
+                    Use SSL/TLS
+                  </label>
                 </div>
               )}
 
@@ -608,25 +982,42 @@ export default function EmailIngestionPage() {
                 </label>
                 <div className="space-y-2">
                   <div>
-                    <label className="block text-xs text-slate-500 mb-0.5">Project (optional)</label>
+                    <label className="block text-xs text-slate-500 mb-0.5">
+                      Project (optional)
+                    </label>
                     <select
                       value={editForm.projectId}
-                      onChange={e => handleProjectChange(e.target.value, 'edit')}
+                      onChange={(e) =>
+                        handleProjectChange(e.target.value, "edit")
+                      }
                       className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
                     >
                       <option value="">No project (root folders)</option>
-                      {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   {editForm.targetFolderId ? (
                     <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
                       <FolderOpen className="h-4 w-4 text-blue-600 shrink-0" />
-                      <span className="text-sm text-blue-800 truncate flex-1">{editSelectedFolderName || editForm.targetFolderId}</span>
-                      <button onClick={() => clearFolder('edit')} className="text-blue-400 hover:text-blue-600"><X className="h-3.5 w-3.5" /></button>
+                      <span className="text-sm text-blue-800 truncate flex-1">
+                        {editSelectedFolderName || editForm.targetFolderId}
+                      </span>
+                      <button
+                        onClick={() => clearFolder("edit")}
+                        className="text-blue-400 hover:text-blue-600"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   ) : (
                     <button
-                      onClick={() => loadFolders(editForm.projectId || null, null, 'edit')}
+                      onClick={() =>
+                        loadFolders(editForm.projectId || null, null, "edit")
+                      }
                       className="w-full px-3 py-2 border border-dashed rounded-lg text-sm text-slate-500 hover:bg-slate-50 flex items-center gap-1 justify-center"
                     >
                       <FolderOpen className="h-4 w-4" /> Browse Folders
@@ -635,25 +1026,52 @@ export default function EmailIngestionPage() {
                   {editBrowsing && !editForm.targetFolderId && (
                     <div className="border rounded-lg overflow-hidden">
                       <div className="bg-slate-50 px-3 py-1.5 text-xs flex items-center gap-1 flex-wrap border-b">
-                        <button onClick={() => navigateBreadcrumb(-1, 'edit')} className="text-blue-600 hover:underline">Root</button>
+                        <button
+                          onClick={() => navigateBreadcrumb(-1, "edit")}
+                          className="text-blue-600 hover:underline"
+                        >
+                          Root
+                        </button>
                         {editFolderBreadcrumbs.map((bc, i) => (
                           <span key={bc.id} className="flex items-center gap-1">
                             <ChevronRight className="h-3 w-3 text-slate-400" />
-                            <button onClick={() => navigateBreadcrumb(i, 'edit')} className="text-blue-600 hover:underline">{bc.name}</button>
+                            <button
+                              onClick={() => navigateBreadcrumb(i, "edit")}
+                              className="text-blue-600 hover:underline"
+                            >
+                              {bc.name}
+                            </button>
                           </span>
                         ))}
                       </div>
                       <div className="max-h-48 overflow-y-auto">
                         {editFolderLoading ? (
-                          <div className="text-center py-4 text-xs text-slate-400">Loading folders...</div>
+                          <div className="text-center py-4 text-xs text-slate-400">
+                            Loading folders...
+                          </div>
                         ) : editFolders.length === 0 ? (
-                          <div className="text-center py-4 text-xs text-slate-400">No folders here. Create one below.</div>
+                          <div className="text-center py-4 text-xs text-slate-400">
+                            No folders here. Create one below.
+                          </div>
                         ) : (
-                          editFolders.map(f => (
-                            <div key={f.id} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 border-b last:border-b-0">
+                          editFolders.map((f) => (
+                            <div
+                              key={f.id}
+                              className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 border-b last:border-b-0"
+                            >
                               <FolderOpen className="h-4 w-4 text-amber-500 shrink-0" />
-                              <button onClick={() => selectFolder(f, 'edit')} className="text-sm text-slate-700 hover:text-blue-600 flex-1 text-left truncate">{f.name}</button>
-                              <button onClick={() => navigateFolder(f, 'edit')} className="text-xs text-slate-400 hover:text-slate-600 p-1"><ChevronRight className="h-3 w-3" /></button>
+                              <button
+                                onClick={() => selectFolder(f, "edit")}
+                                className="text-sm text-slate-700 hover:text-blue-600 flex-1 text-left truncate"
+                              >
+                                {f.name}
+                              </button>
+                              <button
+                                onClick={() => navigateFolder(f, "edit")}
+                                className="text-xs text-slate-400 hover:text-slate-600 p-1"
+                              >
+                                <ChevronRight className="h-3 w-3" />
+                              </button>
                             </div>
                           ))
                         )}
@@ -663,17 +1081,21 @@ export default function EmailIngestionPage() {
                         <FolderPlus className="h-4 w-4 text-slate-400 shrink-0" />
                         <input
                           value={editNewFolderName}
-                          onChange={e => setEditNewFolderName(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && createNewFolder('edit')}
+                          onChange={(e) => setEditNewFolderName(e.target.value)}
+                          onKeyDown={(e) =>
+                            e.key === "Enter" && createNewFolder("edit")
+                          }
                           className="flex-1 px-2 py-1 border rounded text-sm"
                           placeholder="New folder name..."
                         />
                         <button
-                          onClick={() => createNewFolder('edit')}
-                          disabled={!editNewFolderName.trim() || editCreatingFolder}
+                          onClick={() => createNewFolder("edit")}
+                          disabled={
+                            !editNewFolderName.trim() || editCreatingFolder
+                          }
                           className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
                         >
-                          {editCreatingFolder ? '...' : 'Create'}
+                          {editCreatingFolder ? "..." : "Create"}
                         </button>
                       </div>
                     </div>
@@ -683,9 +1105,16 @@ export default function EmailIngestionPage() {
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button onClick={() => setEditingConfig(null)} className="px-4 py-2 text-sm border rounded-lg">Cancel</button>
-              <button onClick={handleUpdateConfig}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              <button
+                onClick={() => setEditingConfig(null)}
+                className="px-4 py-2 text-sm border rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateConfig}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
                 Save Changes
               </button>
             </div>
@@ -700,48 +1129,109 @@ export default function EmailIngestionPage() {
         <div className="text-center py-20 bg-white rounded-xl border">
           <Mail className="mx-auto h-12 w-12 text-slate-300 mb-3" />
           <p className="text-slate-500 mb-1">No email connections configured</p>
-          <p className="text-xs text-slate-400">Click "Add Mailbox" to set up automatic email document ingestion</p>
+          <p className="text-xs text-slate-400">
+            Click "Add Mailbox" to set up automatic email document ingestion
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
-          {configs.map(cfg => (
-            <div key={cfg.id} className="bg-white rounded-xl border overflow-hidden">
+          {configs.map((cfg) => (
+            <div
+              key={cfg.id}
+              className="bg-white rounded-xl border overflow-hidden"
+            >
               {/* Config header */}
               <div className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3 cursor-pointer" onClick={() => setExpandedConfig(expandedConfig === cfg.id ? null : cfg.id)}>
-                  <div className={`p-2 rounded-lg ${cfg.enabled ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}>
+                <div
+                  className="flex items-center gap-3 cursor-pointer"
+                  onClick={() =>
+                    setExpandedConfig(expandedConfig === cfg.id ? null : cfg.id)
+                  }
+                >
+                  <div
+                    className={`p-2 rounded-lg ${cfg.enabled ? "bg-green-100 text-green-600" : "bg-slate-100 text-slate-400"}`}
+                  >
                     <Mail className="h-5 w-5" />
                   </div>
                   <div>
                     <h3 className="font-semibold text-slate-900 flex items-center gap-2">
                       {cfg.name}
-                      {cfg.enabled && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Active</span>}
+                      {cfg.enabled && (
+                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                          Active
+                        </span>
+                      )}
                     </h3>
                     <p className="text-xs text-slate-500">
-                      <span className="inline-block bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-semibold mr-1">{cfg.protocol || 'IMAP'}</span>
-                      {cfg.protocol === 'EWS' ? cfg.ewsUrl : `${cfg.imapHost}:${cfg.imapPort}`} &middot; {cfg.username} &middot; {cfg.folderName} &middot; Every {cfg.pollInterval}min
-                      {cfg.projectId && <span className="ml-1"> &middot; <Building2 className="h-3 w-3 inline" /> {projects.find(p => p.id === cfg.projectId)?.name || 'Project'}</span>}
-                      {cfg.targetFolderId && <span className="ml-1"> &middot; <FolderOpen className="h-3 w-3 inline text-amber-500" /> Folder set</span>}
+                      <span className="inline-block bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-semibold mr-1">
+                        {cfg.protocol || "IMAP"}
+                      </span>
+                      {cfg.protocol === "EWS"
+                        ? cfg.ewsUrl
+                        : `${cfg.imapHost}:${cfg.imapPort}`}{" "}
+                      &middot; {cfg.username} &middot; {cfg.folderName} &middot;
+                      Every {cfg.pollInterval}min
+                      {cfg.projectId && (
+                        <span className="ml-1">
+                          {" "}
+                          &middot; <Building2 className="h-3 w-3 inline" />{" "}
+                          {projects.find((p) => p.id === cfg.projectId)?.name ||
+                            "Project"}
+                        </span>
+                      )}
+                      {cfg.targetFolderId && (
+                        <span className="ml-1">
+                          {" "}
+                          &middot;{" "}
+                          <FolderOpen className="h-3 w-3 inline text-amber-500" />{" "}
+                          Folder set
+                        </span>
+                      )}
                     </p>
                   </div>
-                  {expandedConfig === cfg.id ? <ChevronUp className="h-4 w-4 text-slate-400 ml-2" /> : <ChevronDown className="h-4 w-4 text-slate-400 ml-2" />}
+                  {expandedConfig === cfg.id ? (
+                    <ChevronUp className="h-4 w-4 text-slate-400 ml-2" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-slate-400 ml-2" />
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => startEditing(cfg)}
-                    className="px-3 py-1.5 text-xs border rounded-lg hover:bg-slate-50 text-slate-600 flex items-center gap-1">
+                  <button
+                    onClick={() => startEditing(cfg)}
+                    className="px-3 py-1.5 text-xs border rounded-lg hover:bg-slate-50 text-slate-600 flex items-center gap-1"
+                  >
                     <Pencil className="h-3 w-3" /> Edit
                   </button>
-                  <button onClick={() => handlePollNow(cfg.id)} disabled={polling === cfg.id}
-                    className="px-3 py-1.5 text-xs border rounded-lg hover:bg-blue-50 text-blue-600 flex items-center gap-1 disabled:opacity-50">
-                    {polling === cfg.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                  <button
+                    onClick={() => handlePollNow(cfg.id)}
+                    disabled={polling === cfg.id}
+                    className="px-3 py-1.5 text-xs border rounded-lg hover:bg-blue-50 text-blue-600 flex items-center gap-1 disabled:opacity-50"
+                  >
+                    {polling === cfg.id ? (
+                      <RefreshCw className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Play className="h-3 w-3" />
+                    )}
                     Poll Now
                   </button>
-                  <button onClick={() => handleToggleConfig(cfg.id)}
-                    className={`px-3 py-1.5 text-xs border rounded-lg flex items-center gap-1 ${cfg.enabled ? 'text-amber-600 hover:bg-amber-50' : 'text-green-600 hover:bg-green-50'}`}>
-                    {cfg.enabled ? <><PowerOff className="h-3 w-3" /> Disable</> : <><Power className="h-3 w-3" /> Enable</>}
+                  <button
+                    onClick={() => handleToggleConfig(cfg.id)}
+                    className={`px-3 py-1.5 text-xs border rounded-lg flex items-center gap-1 ${cfg.enabled ? "text-amber-600 hover:bg-amber-50" : "text-green-600 hover:bg-green-50"}`}
+                  >
+                    {cfg.enabled ? (
+                      <>
+                        <PowerOff className="h-3 w-3" /> Disable
+                      </>
+                    ) : (
+                      <>
+                        <Power className="h-3 w-3" /> Enable
+                      </>
+                    )}
                   </button>
-                  <button onClick={() => handleDeleteConfig(cfg.id)}
-                    className="p-1.5 text-xs text-red-500 hover:bg-red-50 rounded-lg">
+                  <button
+                    onClick={() => handleDeleteConfig(cfg.id)}
+                    className="p-1.5 text-xs text-red-500 hover:bg-red-50 rounded-lg"
+                  >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
@@ -752,10 +1242,15 @@ export default function EmailIngestionPage() {
                 <div className="border-t bg-slate-50 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-1">
-                      <Filter className="h-4 w-4" /> Ingestion Rules ({cfg.rules?.length || 0})
+                      <Filter className="h-4 w-4" /> Ingestion Rules (
+                      {cfg.rules?.length || 0})
                     </h4>
-                    <button onClick={() => setAddingRule(addingRule === cfg.id ? null : cfg.id)}
-                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1">
+                    <button
+                      onClick={() =>
+                        setAddingRule(addingRule === cfg.id ? null : cfg.id)
+                      }
+                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1"
+                    >
                       <Plus className="h-3 w-3" /> Add Rule
                     </button>
                   </div>
@@ -765,29 +1260,75 @@ export default function EmailIngestionPage() {
                     <div className="bg-white border rounded-lg p-3 space-y-2">
                       <div className="grid grid-cols-3 gap-2">
                         <div>
-                          <label className="block text-xs text-slate-500 mb-0.5">Rule Name</label>
-                          <input value={ruleForm.ruleName} onChange={e => setRuleForm({...ruleForm, ruleName: e.target.value})}
-                            className="w-full px-2 py-1.5 border rounded text-sm" placeholder="e.g. Emails from Kuda" />
+                          <label className="block text-xs text-slate-500 mb-0.5">
+                            Rule Name
+                          </label>
+                          <input
+                            value={ruleForm.ruleName}
+                            onChange={(e) =>
+                              setRuleForm({
+                                ...ruleForm,
+                                ruleName: e.target.value
+                              })
+                            }
+                            className="w-full px-2 py-1.5 border rounded text-sm"
+                            placeholder="e.g. Emails from Kuda"
+                          />
                         </div>
                         <div>
-                          <label className="block text-xs text-slate-500 mb-0.5">Type</label>
-                          <select value={ruleForm.ruleType} onChange={e => setRuleForm({...ruleForm, ruleType: e.target.value})}
-                            className="w-full px-2 py-1.5 border rounded text-sm bg-white">
-                            {RULE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                          <label className="block text-xs text-slate-500 mb-0.5">
+                            Type
+                          </label>
+                          <select
+                            value={ruleForm.ruleType}
+                            onChange={(e) =>
+                              setRuleForm({
+                                ...ruleForm,
+                                ruleType: e.target.value
+                              })
+                            }
+                            className="w-full px-2 py-1.5 border rounded text-sm bg-white"
+                          >
+                            {RULE_TYPES.map((t) => (
+                              <option key={t.value} value={t.value}>
+                                {t.label}
+                              </option>
+                            ))}
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs text-slate-500 mb-0.5">Value</label>
-                          <input value={ruleForm.ruleValue} onChange={e => setRuleForm({...ruleForm, ruleValue: e.target.value})}
+                          <label className="block text-xs text-slate-500 mb-0.5">
+                            Value
+                          </label>
+                          <input
+                            value={ruleForm.ruleValue}
+                            onChange={(e) =>
+                              setRuleForm({
+                                ...ruleForm,
+                                ruleValue: e.target.value
+                              })
+                            }
                             className="w-full px-2 py-1.5 border rounded text-sm"
-                            placeholder={RULE_TYPES.find(t => t.value === ruleForm.ruleType)?.placeholder}
-                            disabled={ruleForm.ruleType === 'HAS_ATTACHMENT'} />
+                            placeholder={
+                              RULE_TYPES.find(
+                                (t) => t.value === ruleForm.ruleType
+                              )?.placeholder
+                            }
+                            disabled={ruleForm.ruleType === "HAS_ATTACHMENT"}
+                          />
                         </div>
                       </div>
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => setAddingRule(null)} className="px-3 py-1 text-xs border rounded">Cancel</button>
-                        <button onClick={() => handleAddRule(cfg.id)}
-                          className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1">
+                        <button
+                          onClick={() => setAddingRule(null)}
+                          className="px-3 py-1 text-xs border rounded"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => handleAddRule(cfg.id)}
+                          className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1"
+                        >
                           <Check className="h-3 w-3" /> Save Rule
                         </button>
                       </div>
@@ -795,34 +1336,55 @@ export default function EmailIngestionPage() {
                   )}
 
                   {/* Rules list */}
-                  {(!cfg.rules || cfg.rules.length === 0) ? (
+                  {!cfg.rules || cfg.rules.length === 0 ? (
                     <p className="text-xs text-slate-400 text-center py-4">
-                      No rules yet. Add rules like &quot;From Contains kuda&quot; or &quot;Subject Contains invoice&quot; to filter which emails get ingested.
+                      No rules yet. Add rules like &quot;From Contains
+                      kuda&quot; or &quot;Subject Contains invoice&quot; to
+                      filter which emails get ingested.
                     </p>
                   ) : (
                     <div className="space-y-2">
-                      {cfg.rules.map(rule => (
-                        <div key={rule.id} className={`flex items-center justify-between bg-white border rounded-lg px-3 py-2 ${!rule.enabled ? 'opacity-50' : ''}`}>
+                      {cfg.rules.map((rule) => (
+                        <div
+                          key={rule.id}
+                          className={`flex items-center justify-between bg-white border rounded-lg px-3 py-2 ${!rule.enabled ? "opacity-50" : ""}`}
+                        >
                           <div className="flex items-center gap-3">
-                            <div className={`w-2 h-2 rounded-full ${rule.enabled ? 'bg-green-500' : 'bg-slate-300'}`} />
+                            <div
+                              className={`w-2 h-2 rounded-full ${rule.enabled ? "bg-green-500" : "bg-slate-300"}`}
+                            />
                             <div>
-                              <span className="text-sm font-medium text-slate-800">{rule.ruleName}</span>
+                              <span className="text-sm font-medium text-slate-800">
+                                {rule.ruleName}
+                              </span>
                               <span className="ml-2 text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                                {RULE_TYPES.find(t => t.value === rule.ruleType)?.label || rule.ruleType}
+                                {RULE_TYPES.find(
+                                  (t) => t.value === rule.ruleType
+                                )?.label || rule.ruleType}
                               </span>
                               {rule.ruleValue && (
-                                <span className="ml-1 text-xs text-blue-600 font-mono">&quot;{rule.ruleValue}&quot;</span>
+                                <span className="ml-1 text-xs text-blue-600 font-mono">
+                                  &quot;{rule.ruleValue}&quot;
+                                </span>
                               )}
                             </div>
                           </div>
                           <div className="flex items-center gap-1">
-                            <button onClick={() => handleToggleRule(rule.id)}
-                              className={`p-1 rounded text-xs ${rule.enabled ? 'text-amber-500 hover:bg-amber-50' : 'text-green-500 hover:bg-green-50'}`}
-                              title={rule.enabled ? 'Disable' : 'Enable'}>
-                              {rule.enabled ? <PowerOff className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5" />}
+                            <button
+                              onClick={() => handleToggleRule(rule.id)}
+                              className={`p-1 rounded text-xs ${rule.enabled ? "text-amber-500 hover:bg-amber-50" : "text-green-500 hover:bg-green-50"}`}
+                              title={rule.enabled ? "Disable" : "Enable"}
+                            >
+                              {rule.enabled ? (
+                                <PowerOff className="h-3.5 w-3.5" />
+                              ) : (
+                                <Power className="h-3.5 w-3.5" />
+                              )}
                             </button>
-                            <button onClick={() => handleDeleteRule(rule.id)}
-                              className="p-1 rounded text-red-400 hover:bg-red-50 text-xs">
+                            <button
+                              onClick={() => handleDeleteRule(rule.id)}
+                              className="p-1 rounded text-red-400 hover:bg-red-50 text-xs"
+                            >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </div>
@@ -834,9 +1396,13 @@ export default function EmailIngestionPage() {
                   {/* How it works info */}
                   <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mt-2">
                     <p className="text-xs text-blue-700">
-                      <strong>How it works:</strong> The system polls this mailbox every {cfg.pollInterval} minutes. When an email matches
-                      any enabled rule, its attachments are automatically saved as documents in the ECM. If no attachments exist, the email
-                      body is saved as a text file. All ingested documents go through the full pipeline including search indexing and PII detection.
+                      <strong>How it works:</strong> The system polls this
+                      mailbox every {cfg.pollInterval} minutes. When an email
+                      matches any enabled rule, its attachments are
+                      automatically saved as documents in the ECM. If no
+                      attachments exist, the email body is saved as a text file.
+                      All ingested documents go through the full pipeline
+                      including search indexing and PII detection.
                     </p>
                   </div>
                 </div>

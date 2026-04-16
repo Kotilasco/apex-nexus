@@ -25,6 +25,31 @@ public class AiController {
         return ResponseEntity.ok(ApiResponse.success(definition));
     }
 
+    @PostMapping("/summarize")
+    public ResponseEntity<ApiResponse<Map<String, String>>> summarizeDocument(
+            @RequestBody Map<String, String> request) {
+        String content = request.getOrDefault("content", "");
+        String title = request.getOrDefault("title", "Untitled");
+        if (content.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Document content is required"));
+        }
+        String summary = aiService.summarizeDocument(content, title);
+        return ResponseEntity.ok(ApiResponse.success(Map.of("summary", summary)));
+    }
+
+    @PostMapping("/ask")
+    public ResponseEntity<ApiResponse<Map<String, String>>> askQuestion(
+            @RequestBody Map<String, String> request) {
+        String content = request.getOrDefault("content", "");
+        String title = request.getOrDefault("title", "Untitled");
+        String question = request.getOrDefault("question", "");
+        if (content.isBlank() || question.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Document content and question are required"));
+        }
+        String answer = aiService.askDocumentQuestion(content, title, question);
+        return ResponseEntity.ok(ApiResponse.success(Map.of("answer", answer)));
+    }
+
     @GetMapping("/status")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getStatus() {
         boolean available = aiService.isAvailable();

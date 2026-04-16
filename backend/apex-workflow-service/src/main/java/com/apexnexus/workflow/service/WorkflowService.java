@@ -571,6 +571,55 @@ public class WorkflowService {
 
     // ==================== Cancel Workflow ====================
 
+    // ==================== Peer Review ====================
+
+    @Transactional
+    public WorkflowInstanceDto requestPeerReview(UUID instanceId, PeerReviewRequest request, UUID requestedBy) {
+        WorkflowInstance instance = instanceRepository.findByIdWithDefinition(instanceId)
+                .orElseThrow(() -> new ResourceNotFoundException("WorkflowInstance", "id", instanceId));
+
+        WorkflowStatus state = instance.getCurrentState();
+        if (state != WorkflowStatus.REVIEW && state != WorkflowStatus.PENDING_APPROVAL && state != WorkflowStatus.DRAFT) {
+            throw new BusinessException("Peer review can only be requested in DRAFT, REVIEW or PENDING_APPROVAL states");
+        }
+
+        UUID reviewerId = request.getReviewerId();
+
+        // Don't allow requesting yourself as reviewer
+        if (reviewerId.equals(requestedBy)) {
+            throw new BusinessException("You cannot request yourself as a peer reviewer");
+        }
+
+        // Check if reviewer already has an approval record
+        Optional<WorkflowApproval> existing = approvalRepository.findByWorkflowInstanceIdAndApproverId(instanceId, reviewerId);
+        if (existing.isPresent()) {
+            throw new BusinessException("This user is already a reviewer/approver on this workflow");
+        }
+
+        // Create a new approval record for the peer reviewer
+        WorkflowApproval approval = WorkflowApproval.builder()
+                .workflowInstance(instance)
+                .approverId(reviewerId)
+                .approvalOrder(0)
+                .isParallel(true)
+                .decision(ApprovalDecision.PENDING)
+                .comments(request.getComments())
+                .build();
+        approvalRepository.save(approval);
+
+        // Record as a transition note
+        recordTransition(instance, state.name(), state.name(), "peer_review_requested",
+                requestedBy, "Peer review requested" + (request.getComments() != null ? ": " + request.getComments() : ""));
+
+        publishAudit(requestedBy, "PEER_REVIEW_REQUESTED", "WORKFLOW", instance.getId(),
+                Map.of("reviewerId", reviewerId.toString(), "state", state.name()));
+
+        log.info("Peer review requested on workflow {} by {} for reviewer {}", instanceId, requestedBy, reviewerId);
+        return toInstanceDto(instance);
+    }
+
+    // ==================== Cancel (cont.) ====================
+
     @Transactional
     public WorkflowInstanceDto cancelWorkflow(UUID instanceId, String comments, UUID userId) {
         WorkflowInstance instance = instanceRepository.findByIdWithDefinition(instanceId)

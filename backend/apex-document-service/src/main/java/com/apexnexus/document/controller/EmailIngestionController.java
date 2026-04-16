@@ -73,18 +73,25 @@ public class EmailIngestionController {
         EmailIngestionConfig config = configRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Config not found"));
         config.setName(req.getName());
-        if (req.getProtocol() != null) config.setProtocol(req.getProtocol().toUpperCase());
+        if (req.getProtocol() != null)
+            config.setProtocol(req.getProtocol().toUpperCase());
         config.setImapHost(req.getImapHost());
         config.setImapPort(req.getImapPort());
-        if (req.getEwsUrl() != null) config.setEwsUrl(req.getEwsUrl());
+        if (req.getEwsUrl() != null)
+            config.setEwsUrl(req.getEwsUrl());
         config.setUsername(req.getUsername());
         if (req.getPassword() != null && !req.getPassword().isBlank())
             config.setPassword(req.getPassword());
-        if (req.getFolderName() != null) config.setFolderName(req.getFolderName());
-        if (req.getUseSsl() != null) config.setUseSsl(req.getUseSsl());
-        if (req.getPollInterval() != null) config.setPollInterval(req.getPollInterval());
-        if (req.getTargetFolderId() != null) config.setTargetFolderId(req.getTargetFolderId());
-        if (req.getProjectId() != null) config.setProjectId(req.getProjectId());
+        if (req.getFolderName() != null)
+            config.setFolderName(req.getFolderName());
+        if (req.getUseSsl() != null)
+            config.setUseSsl(req.getUseSsl());
+        if (req.getPollInterval() != null)
+            config.setPollInterval(req.getPollInterval());
+        if (req.getTargetFolderId() != null)
+            config.setTargetFolderId(req.getTargetFolderId());
+        if (req.getProjectId() != null)
+            config.setProjectId(req.getProjectId());
         config = configRepository.save(config);
         return ResponseEntity.ok(ApiResponse.ok("Config updated", toDto(config)));
     }

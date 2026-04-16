@@ -30,7 +30,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar open={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} currentPath={pathname} />
+      <Sidebar
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
+        currentPath={pathname}
+        userRoles={(user.roles ?? []).map((r: any) => typeof r === "string" ? r : r.name)}
+      />
       <div className="flex flex-col flex-1 overflow-hidden">
         <Navbar onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
         <main className="flex-1 overflow-auto p-6">{children}</main>

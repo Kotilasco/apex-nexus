@@ -23,8 +23,10 @@ import java.util.Optional;
 /**
  * Authenticates WebDAV requests via multiple mechanisms (in priority order):
  * 1. access_token query parameter (initial URL from frontend)
- * 2. APEX_WEBDAV cookie (set after first successful auth — Word sends cookies automatically)
- * 3. HTTP Basic auth (password = access_token — fallback for Windows credential prompt)
+ * 2. APEX_WEBDAV cookie (set after first successful auth — Word sends cookies
+ * automatically)
+ * 3. HTTP Basic auth (password = access_token — fallback for Windows credential
+ * prompt)
  *
  * This is needed because Word's WebDAV client may strip query parameters on
  * subsequent requests (LOCK, PUT) after the initial GET.
@@ -46,25 +48,28 @@ public class WebDavTokenFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
 
         String authMethod = "none";
 
         // 1. Try access_token query parameter
         String token = request.getParameter("access_token");
-        if (token != null && !token.isBlank()) authMethod = "query_param";
+        if (token != null && !token.isBlank())
+            authMethod = "query_param";
 
         // 2. Try cookie
         if (token == null || token.isBlank()) {
             token = extractFromCookie(request);
-            if (token != null && !token.isBlank()) authMethod = "cookie";
+            if (token != null && !token.isBlank())
+                authMethod = "cookie";
         }
 
         // 3. Try HTTP Basic auth (password field = access_token)
         if (token == null || token.isBlank()) {
             token = extractFromBasicAuth(request);
-            if (token != null && !token.isBlank()) authMethod = "basic_auth";
+            if (token != null && !token.isBlank())
+                authMethod = "basic_auth";
         }
 
         log.info("[WebDAV] {} {} auth={}", request.getMethod(), request.getRequestURI(), authMethod);
@@ -83,28 +88,31 @@ public class WebDavTokenFilter extends OncePerRequestFilter {
         }
 
         WopiAccessToken wopiToken = validated.get();
-        log.debug("[WebDAV] Authenticated user {} for doc {} via token", wopiToken.getUserId(), wopiToken.getDocumentId());
+        log.debug("[WebDAV] Authenticated user {} for doc {} via token", wopiToken.getUserId(),
+                wopiToken.getDocumentId());
 
-        // Set session cookie so Word includes it on subsequent requests (LOCK, PUT, etc.)
+        // Set session cookie so Word includes it on subsequent requests (LOCK, PUT,
+        // etc.)
         Cookie cookie = new Cookie(COOKIE_NAME, token);
-        cookie.setPath("/");  // Use root path — gateway strips /api prefix, Word may use either path
+        cookie.setPath("/"); // Use root path — gateway strips /api prefix, Word may use either path
         cookie.setHttpOnly(true);
-        cookie.setMaxAge((int) java.time.Duration.between(java.time.Instant.now(), wopiToken.getExpiresAt()).getSeconds());
+        cookie.setMaxAge(
+                (int) java.time.Duration.between(java.time.Instant.now(), wopiToken.getExpiresAt()).getSeconds());
         response.addCookie(cookie);
 
         // Set Spring Security authentication context
         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
-                wopiToken.getUserId(),  // principal = UUID
+                wopiToken.getUserId(), // principal = UUID
                 null,
-                List.of(new SimpleGrantedAuthority("ROLE_USER"))
-        );
+                List.of(new SimpleGrantedAuthority("ROLE_USER")));
         SecurityContextHolder.getContext().setAuthentication(auth);
 
         filterChain.doFilter(request, response);
     }
 
     private String extractFromCookie(HttpServletRequest request) {
-        if (request.getCookies() == null) return null;
+        if (request.getCookies() == null)
+            return null;
         for (Cookie c : request.getCookies()) {
             if (COOKIE_NAME.equals(c.getName()) && c.getValue() != null && !c.getValue().isBlank()) {
                 return c.getValue();
@@ -115,7 +123,8 @@ public class WebDavTokenFilter extends OncePerRequestFilter {
 
     private String extractFromBasicAuth(HttpServletRequest request) {
         String authHeader = request.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Basic ")) return null;
+        if (authHeader == null || !authHeader.startsWith("Basic "))
+            return null;
         try {
             String decoded = new String(Base64.getDecoder().decode(authHeader.substring(6)), StandardCharsets.UTF_8);
             // Format: username:password — we use the password as the access_token
@@ -131,7 +140,8 @@ public class WebDavTokenFilter extends OncePerRequestFilter {
 
     /**
      * Send 401 directly without triggering Tomcat's error page dispatch.
-     * Error page dispatch can convert 401→400 for non-standard HTTP methods (LOCK, PROPFIND).
+     * Error page dispatch can convert 401→400 for non-standard HTTP methods (LOCK,
+     * PROPFIND).
      */
     private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);

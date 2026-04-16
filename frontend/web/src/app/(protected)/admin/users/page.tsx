@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { authApi } from '@/lib/api';
+import { useAuthStore } from '@/lib/auth-store';
 import type { User, Role } from '@/lib/types';
 import { formatDateTime } from '@/lib/utils';
 import {
@@ -26,6 +27,10 @@ function isUserActive(user: User): boolean {
 }
 
 export default function AdminUsersPage() {
+  const { user: currentUser } = useAuthStore();
+  const userRoles = (currentUser?.roles ?? []).map((r: any) => (typeof r === "string" ? r : r.name).replace(/^ROLE_/, "").toUpperCase());
+  const isAdmin = userRoles.includes("SYSTEM_ADMIN") || userRoles.includes("ADMIN");
+
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,6 +140,18 @@ export default function AdminUsersPage() {
     VIEWER: 'bg-slate-100 text-slate-700',
     AI_OPERATOR: 'bg-cyan-100 text-cyan-700',
   };
+
+  if (!isAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Shield className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+          <h2 className="text-lg font-semibold text-slate-700">Access Denied</h2>
+          <p className="text-sm text-slate-400 mt-1">You need SYSTEM_ADMIN or ADMIN role to access this page.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

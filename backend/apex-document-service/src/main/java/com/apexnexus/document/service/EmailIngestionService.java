@@ -41,12 +41,14 @@ public class EmailIngestionService {
 
     /**
      * Poll all enabled IMAP configurations every 2 minutes.
-     * Each config's own pollInterval is respected — we skip if not enough time has elapsed.
+     * Each config's own pollInterval is respected — we skip if not enough time has
+     * elapsed.
      */
     @Scheduled(fixedDelay = 120_000, initialDelay = 30_000)
     public void pollAllMailboxes() {
         List<EmailIngestionConfig> configs = configRepository.findByEnabledTrue();
-        if (configs.isEmpty()) return;
+        if (configs.isEmpty())
+            return;
 
         for (EmailIngestionConfig config : configs) {
             try {
@@ -91,8 +93,10 @@ public class EmailIngestionService {
                     // Rule matching (if rules exist, apply them; otherwise take all)
                     EmailIngestionRule matchedRule;
                     if (hasRules) {
-                        matchedRule = matchRulesSimple(config.getRules(), msg.from(), msg.subject(), msg.hasAttachments());
-                        if (matchedRule == null) continue;
+                        matchedRule = matchRulesSimple(config.getRules(), msg.from(), msg.subject(),
+                                msg.hasAttachments());
+                        if (matchedRule == null)
+                            continue;
                     } else {
                         matchedRule = defaultRule(config);
                     }
@@ -135,19 +139,22 @@ public class EmailIngestionService {
         log.info("Polling mailbox '{}' at {}:{}", config.getName(), config.getImapHost(), config.getImapPort());
         int ingested = 0;
 
+        boolean ssl = Boolean.TRUE.equals(config.getUseSsl());
+        String protocol = ssl ? "imaps" : "imap";
+
         Properties props = new Properties();
-        props.put("mail.store.protocol", "imaps");
-        props.put("mail.imaps.host", config.getImapHost());
-        props.put("mail.imaps.port", String.valueOf(config.getImapPort()));
-        props.put("mail.imaps.ssl.enable", String.valueOf(config.getUseSsl()));
-        props.put("mail.imaps.timeout", "15000");
-        props.put("mail.imaps.connectiontimeout", "15000");
+        props.put("mail.store.protocol", protocol);
+        props.put("mail." + protocol + ".host", config.getImapHost());
+        props.put("mail." + protocol + ".port", String.valueOf(config.getImapPort()));
+        props.put("mail." + protocol + ".ssl.enable", String.valueOf(ssl));
+        props.put("mail." + protocol + ".timeout", "15000");
+        props.put("mail." + protocol + ".connectiontimeout", "15000");
 
         Store store = null;
         jakarta.mail.Folder folder = null;
         try {
             Session session = Session.getInstance(props);
-            store = session.getStore("imaps");
+            store = session.getStore(protocol);
             store.connect(config.getImapHost(), config.getImapPort(), config.getUsername(), config.getPassword());
 
             folder = store.getFolder(config.getFolderName());
@@ -159,16 +166,19 @@ public class EmailIngestionService {
             for (Message message : messages) {
                 try {
                     // Skip already-processed (flagged) messages
-                    if (message.isSet(Flags.Flag.FLAGGED)) continue;
+                    if (message.isSet(Flags.Flag.FLAGGED))
+                        continue;
 
                     String from = extractSender(message);
                     String subject = message.getSubject() != null ? message.getSubject() : "(no subject)";
 
                     // Check if any enabled rule matches this message
                     EmailIngestionRule matchedRule = matchRules(config.getRules(), from, subject, message);
-                    if (matchedRule == null) continue;
+                    if (matchedRule == null)
+                        continue;
 
-                    log.info("Rule '{}' matched email from='{}' subject='{}'", matchedRule.getRuleName(), from, subject);
+                    log.info("Rule '{}' matched email from='{}' subject='{}'", matchedRule.getRuleName(), from,
+                            subject);
 
                     // Extract and ingest attachments
                     int attachments = processAttachments(message, config, matchedRule, from, subject);
@@ -204,14 +214,20 @@ public class EmailIngestionService {
 
     private EmailIngestionRule matchRules(List<EmailIngestionRule> rules, String from, String subject, Message msg) {
         boolean hasAtt = false;
-        try { hasAtt = msg.getContentType() != null && msg.getContentType().toLowerCase().contains("multipart"); } catch (Exception ignored) {}
+        try {
+            hasAtt = msg.getContentType() != null && msg.getContentType().toLowerCase().contains("multipart");
+        } catch (Exception ignored) {
+        }
         return matchRulesSimple(rules, from, subject, hasAtt);
     }
 
-    private EmailIngestionRule matchRulesSimple(List<EmailIngestionRule> rules, String from, String subject, boolean hasAttachments) {
-        if (rules == null || rules.isEmpty()) return null;
+    private EmailIngestionRule matchRulesSimple(List<EmailIngestionRule> rules, String from, String subject,
+            boolean hasAttachments) {
+        if (rules == null || rules.isEmpty())
+            return null;
         for (EmailIngestionRule rule : rules) {
-            if (!Boolean.TRUE.equals(rule.getEnabled())) continue;
+            if (!Boolean.TRUE.equals(rule.getEnabled()))
+                continue;
             switch (rule.getRuleType()) {
                 case FROM_CONTAINS:
                     if (from != null && from.toLowerCase().contains(rule.getRuleValue().toLowerCase()))
@@ -230,7 +246,8 @@ public class EmailIngestionService {
                         return rule;
                     break;
                 case HAS_ATTACHMENT:
-                    if (hasAttachments) return rule;
+                    if (hasAttachments)
+                        return rule;
                     break;
             }
         }
@@ -247,19 +264,21 @@ public class EmailIngestionService {
     }
 
     private int processAttachments(Message message, EmailIngestionConfig config, EmailIngestionRule rule,
-                                    String from, String subject) throws Exception {
+            String from, String subject) throws Exception {
         int count = 0;
         Object content = message.getContent();
         if (content instanceof MimeMultipart multipart) {
             for (int i = 0; i < multipart.getCount(); i++) {
                 BodyPart part = multipart.getBodyPart(i);
                 if (Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition()) ||
-                    (part.getFileName() != null && !part.getFileName().isBlank())) {
+                        (part.getFileName() != null && !part.getFileName().isBlank())) {
 
                     String fileName = part.getFileName();
-                    if (fileName == null || fileName.isBlank()) fileName = "attachment_" + i;
+                    if (fileName == null || fileName.isBlank())
+                        fileName = "attachment_" + i;
                     String mimeType = part.getContentType();
-                    if (mimeType != null && mimeType.contains(";")) mimeType = mimeType.split(";")[0].trim();
+                    if (mimeType != null && mimeType.contains(";"))
+                        mimeType = mimeType.split(";")[0].trim();
 
                     byte[] data = readBytes(part.getInputStream());
                     saveEmailAsDocument(data, fileName, mimeType, config, rule, from, subject);
@@ -271,8 +290,8 @@ public class EmailIngestionService {
     }
 
     private void saveEmailAsDocument(byte[] data, String fileName, String mimeType,
-                                      EmailIngestionConfig config, EmailIngestionRule rule,
-                                      String from, String subject) throws Exception {
+            EmailIngestionConfig config, EmailIngestionRule rule,
+            String from, String subject) throws Exception {
         String sha256 = storageService.calculateSha256(data);
         String objectGuid = UUID.randomUUID().toString().replace("-", "");
         String extension = getExtension(fileName);
@@ -303,7 +322,7 @@ public class EmailIngestionService {
                 .fileSizeBytes((long) data.length)
                 .storageKey(storageKey)
                 .authorId(config.getCreatedBy())
-                .tags(new String[]{"email-ingested", rule.getRuleName().toLowerCase().replace(" ", "-")})
+                .tags(new String[] { "email-ingested", rule.getRuleName().toLowerCase().replace(" ", "-") })
                 .metadataJson(metadata)
                 .retentionPeriodYears(20)
                 .retentionStartDate(Instant.now())
@@ -342,7 +361,8 @@ public class EmailIngestionService {
     private String extractTextBody(Message message) {
         try {
             Object content = message.getContent();
-            if (content instanceof String s) return s;
+            if (content instanceof String s)
+                return s;
             if (content instanceof MimeMultipart mp) {
                 for (int i = 0; i < mp.getCount(); i++) {
                     BodyPart bp = mp.getBodyPart(i);
@@ -361,18 +381,28 @@ public class EmailIngestionService {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         byte[] buf = new byte[8192];
         int n;
-        while ((n = is.read(buf)) != -1) bos.write(buf, 0, n);
+        while ((n = is.read(buf)) != -1)
+            bos.write(buf, 0, n);
         return bos.toByteArray();
     }
 
     private String getExtension(String fileName) {
-        if (fileName == null) return "";
+        if (fileName == null)
+            return "";
         int dot = fileName.lastIndexOf('.');
         return dot > 0 ? fileName.substring(dot + 1).toLowerCase() : "";
     }
 
     private void closeQuietly(jakarta.mail.Folder folder, Store store) {
-        try { if (folder != null && folder.isOpen()) folder.close(false); } catch (Exception ignored) {}
-        try { if (store != null) store.close(); } catch (Exception ignored) {}
+        try {
+            if (folder != null && folder.isOpen())
+                folder.close(false);
+        } catch (Exception ignored) {
+        }
+        try {
+            if (store != null)
+                store.close();
+        } catch (Exception ignored) {
+        }
     }
 }

@@ -107,6 +107,15 @@ public class WorkflowController {
         return ResponseEntity.ok(ApiResponse.success(workflowService.cancelWorkflow(id, comments, userId)));
     }
 
+    @PostMapping("/instances/{id}/peer-review")
+    public ResponseEntity<ApiResponse<WorkflowInstanceDto>> requestPeerReview(
+            @PathVariable UUID id,
+            @Valid @RequestBody PeerReviewRequest request,
+            Authentication auth) {
+        UUID userId = UUID.fromString(auth.getName());
+        return ResponseEntity.ok(ApiResponse.success(workflowService.requestPeerReview(id, request, userId)));
+    }
+
     // ==================== Queries ====================
 
     @GetMapping("/instances/my")

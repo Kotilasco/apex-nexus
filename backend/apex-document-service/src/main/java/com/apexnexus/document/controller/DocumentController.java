@@ -104,8 +104,10 @@ public class DocumentController {
         DocumentDto doc = documentService.getDocument(id);
 
         ResponseEntity.BodyBuilder response = ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + doc.getTitle() + "." + doc.getFileExtension() + "\"");
+                .contentType(MediaType
+                        .parseMediaType(doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + doc.getTitle() + "." + doc.getFileExtension() + "\"");
 
         if (Boolean.TRUE.equals(doc.getPiiDetected())) {
             response.header("X-PII-Warning", "true")
@@ -258,7 +260,8 @@ public class DocumentController {
     // --- Text content editing ---
 
     @GetMapping("/{id}/content")
-    public ResponseEntity<ApiResponse<Map<String, String>>> getTextContent(@PathVariable UUID id, Authentication auth) throws Exception {
+    public ResponseEntity<ApiResponse<Map<String, String>>> getTextContent(@PathVariable UUID id, Authentication auth)
+            throws Exception {
         UUID userId = (UUID) auth.getPrincipal();
         String text = documentService.getTextContent(id, userId);
         return ResponseEntity.ok(ApiResponse.ok(Map.of("content", text)));
@@ -269,27 +272,27 @@ public class DocumentController {
         DocumentDto doc = documentService.getDocument(id);
         String extractedContent = documentService.getExtractedContent(id);
 
-        // Fall back to raw file content for text files if extracted content not available
+        // Fall back to raw file content for text files if extracted content not
+        // available
         if ((extractedContent == null || extractedContent.isBlank()) && doc.getMimeType() != null
                 && (doc.getMimeType().startsWith("text/") || "application/json".equals(doc.getMimeType()))) {
             try {
                 extractedContent = documentService.getRawTextContent(id);
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
 
         if (extractedContent == null || extractedContent.isBlank()) {
             return ResponseEntity.ok(ApiResponse.ok(Map.of(
                     "content", "Redacted preview not available — content could not be extracted from this file type.",
-                    "redacted", false
-            )));
+                    "redacted", false)));
         }
         String redacted = piiRedactionService.redact(extractedContent);
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
                 "content", redacted,
                 "redacted", true,
                 "piiSeverity", doc.getPiiSeverity() != null ? doc.getPiiSeverity() : "NONE",
-                "piiTypes", doc.getPiiTypes() != null ? doc.getPiiTypes() : ""
-        )));
+                "piiTypes", doc.getPiiTypes() != null ? doc.getPiiTypes() : "")));
     }
 
     @PutMapping("/{id}/content")
@@ -324,7 +327,8 @@ public class DocumentController {
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(mimeType))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + doc.getTitle() + "." + doc.getFileExtension() + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"" + doc.getTitle() + "." + doc.getFileExtension() + "\"")
                 .header(HttpHeaders.CACHE_CONTROL, "private, max-age=300")
                 .body(data);
     }
@@ -337,8 +341,7 @@ public class DocumentController {
                 "piiSeverity", doc.getPiiSeverity() != null ? doc.getPiiSeverity() : "NONE",
                 "piiTypes", doc.getPiiTypes() != null ? doc.getPiiTypes() : "",
                 "piiScanDate", doc.getPiiScanDate() != null ? doc.getPiiScanDate().toString() : "",
-                "privacyRedactionEnabled", Boolean.TRUE.equals(doc.getPrivacyRedactionEnabled())
-        );
+                "privacyRedactionEnabled", Boolean.TRUE.equals(doc.getPrivacyRedactionEnabled()));
         return ResponseEntity.ok(ApiResponse.ok(piiInfo));
     }
 

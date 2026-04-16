@@ -8,7 +8,11 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "email_ingestion_rules")
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class EmailIngestionRule {
 
     @Id
@@ -42,7 +46,8 @@ public class EmailIngestionRule {
     @PrePersist
     void prePersist() {
         createdAt = Instant.now();
-        if (enabled == null) enabled = true;
+        if (enabled == null)
+            enabled = true;
     }
 
     public enum RuleType {
