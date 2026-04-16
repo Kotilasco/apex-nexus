@@ -669,17 +669,25 @@ public class DocumentService {
     // ============ LEGAL HOLD ============
 
     /**
-     * Re-index all existing documents into Elasticsearch (metadata only, no file
-     * content).
+     * Re-index all existing documents into Elasticsearch with full content extraction.
+     * Loads file data from storage so the search service can extract text for full-text search.
      * Returns the number of documents queued for indexing.
      */
     @Transactional(readOnly = true)
     public int reindexAll() {
         List<Document> allDocs = documentRepository.findAll();
         for (Document doc : allDocs) {
-            searchIndexPublisher.publishIndex(doc, null);
+            byte[] fileData = null;
+            try {
+                if (doc.getStorageKey() != null) {
+                    fileData = storageService.retrieveFile(doc.getStorageKey());
+                }
+            } catch (Exception e) {
+                log.warn("Could not load file data for doc {} ({}): {}", doc.getId(), doc.getTitle(), e.getMessage());
+            }
+            searchIndexPublisher.publishIndex(doc, fileData);
         }
-        log.info("Queued {} documents for re-indexing", allDocs.size());
+        log.info("Queued {} documents for re-indexing (with content)", allDocs.size());
         return allDocs.size();
     }
 

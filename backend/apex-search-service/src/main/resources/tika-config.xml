@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<properties>
+    <parsers>
+        <parser class="org.apache.tika.parser.DefaultParser">
+            <parser-exclude class="org.apache.tika.parser.ocr.TesseractOCRParser"/>
+        </parser>
+        <parser class="org.apache.tika.parser.ocr.TesseractOCRParser">
+            <params>
+                <param name="timeoutSeconds" type="int">120</param>
+                <param name="maxFileSizeToOcr" type="long">52428800</param>
+            </params>
+        </parser>
+        <parser class="org.apache.tika.parser.pdf.PDFParser">
+            <params>
+                <param name="ocrStrategy" type="string">ocr_and_text_extraction</param>
+                <param name="ocrDPI" type="int">150</param>
+                <param name="ocrImageFormatName" type="string">png</param>
+            </params>
+        </parser>
+    </parsers>
+</properties>

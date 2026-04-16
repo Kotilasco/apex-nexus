@@ -3,11 +3,13 @@ package com.apexnexus.search.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
+import org.apache.tika.config.TikaConfig;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.metadata.TikaCoreProperties;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -20,10 +22,22 @@ import java.util.Map;
 @Slf4j
 public class ContentExtractorService {
 
-    private final Tika tika = new Tika();
+    private final Tika tika = createTika();
 
     // Maximum text length to extract (10MB of text)
     private static final int MAX_TEXT_LENGTH = 10_000_000;
+
+    private static Tika createTika() {
+        try (InputStream is = ContentExtractorService.class.getResourceAsStream("/tika-config.xml")) {
+            if (is != null) {
+                TikaConfig config = new TikaConfig(is);
+                return new Tika(config);
+            }
+        } catch (Exception e) {
+            // fall through to default
+        }
+        return new Tika();
+    }
 
     /**
      * Extract text content from raw file bytes.

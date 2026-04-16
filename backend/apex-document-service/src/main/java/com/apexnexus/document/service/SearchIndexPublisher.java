@@ -121,6 +121,10 @@ public class SearchIndexPublisher {
         map.put("fileSize", doc.getFileSizeBytes());
         map.put("createdAt", doc.getCreatedAt() != null ? doc.getCreatedAt().toString() : Instant.now().toString());
         map.put("updatedAt", doc.getUpdatedAt() != null ? doc.getUpdatedAt().toString() : Instant.now().toString());
+        // Include previously extracted content as fallback for full-text search
+        if (doc.getExtractedContent() != null && !doc.getExtractedContent().isBlank()) {
+            map.put("content", doc.getExtractedContent());
+        }
         return map;
     }
 }
