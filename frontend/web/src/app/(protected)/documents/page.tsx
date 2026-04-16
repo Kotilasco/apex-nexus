@@ -3243,18 +3243,30 @@ function DocumentAiPanel({
         const res = await documentApi.getContent(doc.id);
         const raw = res.data?.data ?? res.data;
         // Backend returns {content: "text"} — extract the text
-        if (typeof raw === "string") {
+        if (typeof raw === "string" && raw.trim()) {
           setDocContent(raw);
-        } else if (raw && typeof raw === "object" && typeof raw.content === "string") {
+        } else if (raw && typeof raw === "object" && typeof raw.content === "string" && raw.content.trim()) {
           setDocContent(raw.content);
         } else if (raw) {
           setDocContent(JSON.stringify(raw));
         } else {
-          setError("Document has no text content. Try uploading a text-based file.");
+          // Primary endpoint returned empty — try redacted content as fallback
+          throw new Error("empty");
         }
       } catch (e: any) {
-        console.error("AI panel content fetch error:", e);
-        setError("Could not load document content. The document may be a binary file.");
+        // Fallback: try redacted content endpoint (uses Tika-extracted text)
+        try {
+          const res2 = await documentApi.getRedactedContent(doc.id);
+          const raw2 = res2.data?.data ?? res2.data;
+          const text = typeof raw2 === "string" ? raw2 : raw2?.content;
+          if (text && typeof text === "string" && text.trim() && text !== "Redacted preview not available") {
+            setDocContent(text);
+          } else {
+            setError("No text content available. The document may not have been processed yet.");
+          }
+        } catch {
+          setError("Could not load document content. The document may not have been processed yet.");
+        }
       }
       setContentLoading(false);
     };

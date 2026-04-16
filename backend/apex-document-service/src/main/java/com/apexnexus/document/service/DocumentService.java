@@ -291,11 +291,21 @@ public class DocumentService {
     public String getTextContent(UUID documentId, UUID userId) throws Exception {
         Document doc = findDocumentOrThrow(documentId);
         String mime = doc.getMimeType() != null ? doc.getMimeType() : "";
-        if (!mime.startsWith("text/") && !mime.equals("application/json")) {
-            throw new BusinessException("Only text-based documents can be read as text");
+
+        // For text-based files, read raw bytes directly
+        if (mime.startsWith("text/") || mime.equals("application/json")) {
+            byte[] data = storageService.retrieveFile(doc.getStorageKey());
+            return new String(data, java.nio.charset.StandardCharsets.UTF_8);
         }
-        byte[] data = storageService.retrieveFile(doc.getStorageKey());
-        return new String(data, java.nio.charset.StandardCharsets.UTF_8);
+
+        // For binary files (PDF, Word, etc.), return Tika-extracted text if available
+        String extracted = doc.getExtractedContent();
+        if (extracted != null && !extracted.isBlank()) {
+            return extracted;
+        }
+
+        throw new BusinessException(
+                "No extracted text available for this document. The file may not have been processed yet.");
     }
 
     public String getExtractedContent(UUID documentId) {
