@@ -34,7 +34,7 @@ config_payload = {
     "protocol": "IMAP",
     "imapHost": "greenmail",
     "imapPort": 3143,
-    "username": "ingest@globalholdings.com",
+    "username": "ingest",
     "password": "Holdings2030",
     "folderName": "INBOX",
     "useSsl": False,
