@@ -18,6 +18,7 @@ export default function SearchPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [error, setError] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [filters, setFilters] = useState({
     tags: '',
@@ -32,6 +33,7 @@ export default function SearchPage() {
     if (!query.trim()) return;
     setLoading(true);
     setPage(p);
+    setError('');
     try {
       let res;
       if (showAdvanced && Object.values(filters).some(v => v)) {
@@ -67,7 +69,10 @@ export default function SearchPage() {
       setTotal(hitCount);
       setTotalPages(data.totalPages ?? Math.ceil(hitCount / 20));
       setSearched(true);
-    } catch { /* ignore */ }
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Search failed. Please try again.');
+      setResults([]);
+    }
     setLoading(false);
   };
 
@@ -86,6 +91,10 @@ export default function SearchPage() {
         <h1 className="text-2xl font-bold text-slate-900">Search</h1>
         <p className="text-slate-500 mt-1">Find documents across the entire archive</p>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">{error}</div>
+      )}
 
       {/* Search bar */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">

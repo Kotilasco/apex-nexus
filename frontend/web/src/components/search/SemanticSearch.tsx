@@ -16,15 +16,18 @@ export default function SemanticSearch() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSearch = async () => {
     if (!query.trim()) return;
     setLoading(true);
+    setError('');
     try {
       const res = await searchApi.semantic(query);
       setResults(res.data.data.results || []);
-    } catch {
+    } catch (err: any) {
       setResults([]);
+      setError(err?.response?.data?.message || err?.message || 'Semantic search failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -54,6 +57,10 @@ export default function SemanticSearch() {
           {loading ? 'Searching...' : 'Find Similar'}
         </button>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm mb-4">{error}</div>
+      )}
 
       {results.length > 0 && (
         <div className="space-y-3">

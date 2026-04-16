@@ -5,7 +5,10 @@ import co.elastic.clients.json.jackson.JacksonJsonpMapper;
 import co.elastic.clients.transport.ElasticsearchTransport;
 import co.elastic.clients.transport.rest_client.RestClientTransport;
 import org.apache.http.HttpHost;
+import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
+import org.apache.http.impl.nio.reactor.IOReactorConfig;
 import org.elasticsearch.client.RestClient;
+import org.elasticsearch.client.RestClientBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,7 +27,21 @@ public class ElasticsearchConfig {
 
     @Bean
     public RestClient restClient() {
-        return RestClient.builder(new HttpHost(host, port, scheme)).build();
+        return RestClient.builder(new HttpHost(host, port, scheme))
+                .setRequestConfigCallback(requestConfigBuilder ->
+                        requestConfigBuilder
+                                .setConnectTimeout(5000)
+                                .setSocketTimeout(60000)
+                                .setConnectionRequestTimeout(5000))
+                .setHttpClientConfigCallback(httpClientBuilder ->
+                        httpClientBuilder
+                                .setDefaultIOReactorConfig(
+                                        IOReactorConfig.custom()
+                                                .setSoKeepAlive(true)
+                                                .build())
+                                .setMaxConnTotal(20)
+                                .setMaxConnPerRoute(10))
+                .build();
     }
 
     @Bean
