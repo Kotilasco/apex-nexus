@@ -128,7 +128,9 @@ public class DocumentService {
                 .tags(request.getTags())
                 .metadataJson(request.getMetadata() != null ? request.getMetadata() : new HashMap<>())
                 .retentionPeriodYears(retentionYears)
+                .retentionPeriodMinutes(request.getRetentionPeriodMinutes())
                 .retentionStartDate(Instant.now())
+                .retentionExpiry(calculateRetentionExpiry(Instant.now(), retentionYears, request.getRetentionPeriodMinutes()))
                 .privacyRedactionEnabled(privacyRedaction)
                 .build();
 
@@ -1112,6 +1114,82 @@ public class DocumentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Document", "id", id));
     }
 
+    /**
+     * Calculate retention expiry from start date + years and/or minutes.
+     * If minutes is set, it takes precedence (for testing/demo short retention).
+     */
+    private Instant calculateRetentionExpiry(Instant start, Integer years, Integer minutes) {
+        if (minutes != null && minutes > 0) {
+            return start.plus(Duration.ofMinutes(minutes));
+        }
+        if (years != null && years > 0) {
+            return start.plus(Duration.ofDays(years * 365L));
+        }
+        return start.plus(Duration.ofDays(20 * 365L)); // default 20 years
+    }
+
+    /**
+     * Update retention for a specific document.
+     * The new retention cannot exceed the project's default retention (if in a project).
+     */
+    @Transactional
+    public DocumentDto updateRetention(UUID docId, Integer retentionYears, Integer retentionMinutes, UUID userId) {
+        Document doc = findDocumentOrThrow(docId);
+
+        // Validate: per-document retention must not exceed project retention
+        if (doc.getProjectId() != null) {
+            try {
+                Integer projectRetention = jdbcTemplate.queryForObject(
+                        "SELECT default_retention_period_years FROM projects WHERE id = ?",
+                        Integer.class, doc.getProjectId());
+                if (projectRetention != null) {
+                    // Convert the requested retention to total minutes for comparison
+                    long requestedMinutes = 0;
+                    if (retentionMinutes != null && retentionMinutes > 0) {
+                        requestedMinutes = retentionMinutes;
+                    } else if (retentionYears != null) {
+                        requestedMinutes = retentionYears * 365L * 24 * 60;
+                    }
+                    long projectMaxMinutes = projectRetention * 365L * 24 * 60;
+                    if (requestedMinutes > projectMaxMinutes) {
+                        throw new BusinessException(
+                                "Document retention cannot exceed project retention of " + projectRetention + " years");
+                    }
+                }
+            } catch (BusinessException e) {
+                throw e;
+            } catch (Exception e) {
+                log.warn("Could not look up project retention for validation", e);
+            }
+        }
+
+        Instant start = doc.getRetentionStartDate() != null ? doc.getRetentionStartDate() : Instant.now();
+        if (retentionMinutes != null && retentionMinutes > 0) {
+            doc.setRetentionPeriodMinutes(retentionMinutes);
+            doc.setRetentionPeriodYears(null);
+        } else {
+            doc.setRetentionPeriodYears(retentionYears != null ? retentionYears : 20);
+            doc.setRetentionPeriodMinutes(null);
+        }
+        doc.setRetentionStartDate(start);
+        doc.setRetentionExpiry(calculateRetentionExpiry(start, doc.getRetentionPeriodYears(), doc.getRetentionPeriodMinutes()));
+        doc = documentRepository.save(doc);
+
+        auditPublisher.publish(AuditEvent.builder()
+                .userId(userId)
+                .action("RETENTION_UPDATED")
+                .resourceType("DOCUMENT")
+                .resourceId(doc.getId())
+                .resourceName(doc.getTitle())
+                .details(Map.of(
+                        "years", String.valueOf(doc.getRetentionPeriodYears()),
+                        "minutes", String.valueOf(doc.getRetentionPeriodMinutes()),
+                        "expiry", doc.getRetentionExpiry().toString()))
+                .build());
+
+        return mapToDto(doc);
+    }
+
     private String getFileExtension(String filename) {
         if (filename == null)
             return "";
@@ -1149,6 +1227,7 @@ public class DocumentService {
                 .checkedOutAt(doc.getCheckedOutAt())
                 .retentionStartDate(doc.getRetentionStartDate())
                 .retentionPeriodYears(doc.getRetentionPeriodYears())
+                .retentionPeriodMinutes(doc.getRetentionPeriodMinutes())
                 .retentionExpiry(doc.getRetentionExpiry())
                 .legalHold(doc.getLegalHold())
                 .legalHoldReason(doc.getLegalHoldReason())

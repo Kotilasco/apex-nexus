@@ -29,8 +29,8 @@ public class AiService {
         this.restTemplate = new RestTemplate();
         org.springframework.http.client.SimpleClientHttpRequestFactory factory =
                 new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(java.time.Duration.ofSeconds(10));
-        factory.setReadTimeout(java.time.Duration.ofSeconds(180));
+        factory.setConnectTimeout(java.time.Duration.ofSeconds(30));
+        factory.setReadTimeout(java.time.Duration.ofSeconds(600));
         this.restTemplate.setRequestFactory(factory);
     }
 
@@ -157,6 +157,7 @@ public class AiService {
         body.put("model", ollamaModel);
         body.put("prompt", prompt);
         body.put("stream", false);
+        body.put("options", Map.of("num_predict", 256, "temperature", 0.7));
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

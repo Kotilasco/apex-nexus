@@ -129,6 +129,8 @@ export const documentApi = {
   setLegalHold: (id: string, reason: string) =>
     api.post(`/documents/${id}/legal-hold`, null, { params: { reason } }),
   removeLegalHold: (id: string) => api.delete(`/documents/${id}/legal-hold`),
+  updateRetention: (id: string, data: { retentionPeriodYears?: number; retentionPeriodMinutes?: number }) =>
+    api.put(`/documents/${id}/retention`, data),
   /* Folders */
   getFolders: (parentId?: string) =>
     parentId ? api.get(`/folders/${parentId}/children`) : api.get('/folders/root'),

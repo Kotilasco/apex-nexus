@@ -17,4 +17,5 @@ public class CreateDocumentRequest {
     private String[] tags;
     private Map<String, Object> metadata;
     private Integer retentionPeriodYears;
+    private Integer retentionPeriodMinutes;
 }

@@ -50,6 +50,7 @@ export interface Document {
   legalHoldReason: string | null;
   retentionStartDate?: string;
   retentionPeriodYears?: number;
+  retentionPeriodMinutes?: number;
   retentionExpiry?: string | null;
   privacyRedactionEnabled?: boolean;
   piiDetected?: boolean;

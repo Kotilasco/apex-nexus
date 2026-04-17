@@ -257,6 +257,19 @@ public class DocumentController {
         return ResponseEntity.ok(ApiResponse.ok(documentService.removeLegalHold(id, userId)));
     }
 
+    // --- Retention ---
+
+    @PutMapping("/{id}/retention")
+    public ResponseEntity<ApiResponse<DocumentDto>> updateRetention(
+            @PathVariable UUID id,
+            @RequestBody Map<String, Integer> body,
+            Authentication auth) {
+        UUID userId = (UUID) auth.getPrincipal();
+        Integer years = body.get("retentionPeriodYears");
+        Integer minutes = body.get("retentionPeriodMinutes");
+        return ResponseEntity.ok(ApiResponse.ok(documentService.updateRetention(id, years, minutes, userId)));
+    }
+
     // --- Text content editing ---
 
     @GetMapping("/{id}/content")

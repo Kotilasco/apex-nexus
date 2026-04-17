@@ -36,6 +36,7 @@ public class DocumentDto {
     private Instant checkedOutAt;
     private Instant retentionStartDate;
     private Integer retentionPeriodYears;
+    private Integer retentionPeriodMinutes;
     private Instant retentionExpiry;
     private Boolean legalHold;
     private String legalHoldReason;

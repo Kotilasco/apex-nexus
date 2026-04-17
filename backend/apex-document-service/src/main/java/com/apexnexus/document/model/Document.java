@@ -82,6 +82,9 @@ public class Document {
     @Builder.Default
     private Integer retentionPeriodYears = 20;
 
+    @Column(name = "retention_period_minutes")
+    private Integer retentionPeriodMinutes;
+
     @Column(name = "retention_expiry")
     private Instant retentionExpiry;
 

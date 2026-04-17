@@ -84,10 +84,10 @@ public class RetentionService {
         // Query documents where retention has expired and not already in disposition queue
         List<Map<String, Object>> expired = jdbcTemplate.queryForList(
                 """
-                SELECT d.id, d.title, d.retention_policy_id, d.retention_expires_at
+                SELECT d.id, d.title, d.retention_expiry
                 FROM documents d
-                WHERE d.retention_expires_at IS NOT NULL
-                  AND d.retention_expires_at <= NOW()
+                WHERE d.retention_expiry IS NOT NULL
+                  AND d.retention_expiry <= NOW()
                   AND d.status != 'DESTROYED'
                   AND d.legal_hold = false
                   AND NOT EXISTS (
@@ -101,27 +101,19 @@ public class RetentionService {
         for (Map<String, Object> doc : expired) {
             UUID documentId = (UUID) doc.get("id");
             String title = (String) doc.get("title");
-            UUID policyId = (UUID) doc.get("retention_policy_id");
-            LocalDateTime expiresAt = ((java.sql.Timestamp) doc.get("retention_expires_at")).toLocalDateTime();
-
-            RetentionPolicy policy = policyId != null ?
-                    policyRepository.findById(policyId).orElse(null) : null;
+            java.sql.Timestamp expiresTs = (java.sql.Timestamp) doc.get("retention_expiry");
+            LocalDateTime expiresAt = expiresTs != null ? expiresTs.toLocalDateTime() : LocalDateTime.now();
 
             DispositionItem item = DispositionItem.builder()
                     .documentId(documentId)
                     .documentTitle(title)
-                    .policy(policy)
                     .retentionExpiresAt(expiresAt)
                     .scheduledDestructionDate(LocalDateTime.now().plusDays(gracePeriodDays))
                     .build();
 
-            // Auto-approve if policy allows and doesn't require approval
-            if (policy != null && Boolean.TRUE.equals(policy.getAutoDispose())
-                    && !Boolean.TRUE.equals(policy.getRequiresApproval())) {
-                item.setStatus(DispositionStatus.APPROVED);
-                item.setApprovedAt(LocalDateTime.now());
-                item.setReason("Auto-approved by retention policy: " + policy.getName());
-            }
+            // Auto-approve since no policy lookup needed
+            item.setStatus(DispositionStatus.PENDING);
+            item.setReason("Retention period expired");
 
             dispositionRepository.save(item);
             queued++;
