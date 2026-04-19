@@ -38,6 +38,8 @@ public class SecurityConfig {
                 .requestMatchers("/wopi/files/**").permitAll()  // WOPI uses its own token auth
                 .requestMatchers("/webdav/**").permitAll()      // WebDAV uses access_token filter
                 .requestMatchers("/ws/**").permitAll()           // WebSocket endpoint
+                .requestMatchers("/sap-mock/**").permitAll()     // Internal mock-SAP calls (gateway protects externally)
+                .requestMatchers("/public/vendor-portal/**").permitAll() // Token-authenticated vendor portal
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex

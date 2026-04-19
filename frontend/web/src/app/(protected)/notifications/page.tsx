@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { notificationApi } from '@/lib/api';
 import type { Notification } from '@/lib/types';
 import { formatDateTime } from '@/lib/utils';
@@ -19,6 +20,7 @@ const typeIcons: Record<string, typeof Bell> = {
 };
 
 export default function NotificationsPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>('unread');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +69,44 @@ export default function NotificationsPage() {
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       setUnreadCount(0);
     } catch { /* silent */ }
+  };
+
+  const resolveTarget = (n: Notification): string | null => {
+    if (!n.resourceType || !n.resourceId) return null;
+    const t = String(n.resourceType).toUpperCase();
+    const id = n.resourceId;
+    switch (t) {
+      case 'DOCUMENT':
+      case 'DOCUMENT_VERSION':
+      case 'VERSION':
+        return `/documents?doc=${id}`;
+      case 'WORKFLOW':
+      case 'WORKFLOW_INSTANCE':
+      case 'TASK':
+        return `/workflows?task=${id}`;
+      case 'PROJECT':
+        return `/projects/${id}`;
+      case 'VENDOR_PORTAL':
+        return `/vendor-portals?id=${id}`;
+      case 'RETENTION':
+        return `/retention?id=${id}`;
+      case 'SIGNATURE':
+        return `/documents?signature=${id}`;
+      default:
+        return null;
+    }
+  };
+
+  const handleOpen = async (n: Notification) => {
+    if (!n.read) {
+      try {
+        await notificationApi.markRead(n.id);
+        setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+        setUnreadCount((c) => Math.max(0, c - 1));
+      } catch { /* silent */ }
+    }
+    const target = resolveTarget(n);
+    if (target) router.push(target);
   };
 
   return (
@@ -132,12 +172,17 @@ export default function NotificationsPage() {
         <div className="bg-white rounded-xl border divide-y">
           {notifications.map((n) => {
             const Icon = typeIcons[n.type] || Bell;
+            const target = resolveTarget(n);
             return (
               <div
                 key={n.id}
+                onClick={() => handleOpen(n)}
+                role="button"
+                tabIndex={target ? 0 : -1}
+                onKeyDown={(e) => { if (target && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); handleOpen(n); } }}
                 className={`p-4 flex items-start gap-4 transition-colors ${
                   n.read ? 'bg-white' : 'bg-primary-50/50'
-                }`}
+                } ${target ? 'cursor-pointer hover:bg-slate-50' : ''}`}
               >
                 <div className={`p-2 rounded-lg shrink-0 ${
                   n.read ? 'bg-slate-100' : 'bg-primary-100'
@@ -156,7 +201,7 @@ export default function NotificationsPage() {
                     </div>
                     {!n.read && (
                       <button
-                        onClick={() => handleMarkRead(n.id)}
+                        onClick={(e) => { e.stopPropagation(); handleMarkRead(n.id); }}
                         className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg shrink-0"
                         title="Mark as read"
                       >

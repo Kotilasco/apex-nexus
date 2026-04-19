@@ -101,7 +101,30 @@ public class EmailIngestionService {
                         matchedRule = defaultRule(config);
                     }
 
-                    // Get attachment info
+                    // Build EWS email metadata
+                    Map<String, Object> ewsMeta = new LinkedHashMap<>();
+                    ewsMeta.put("source", "email");
+                    ewsMeta.put("emailFrom", msg.from());
+                    ewsMeta.put("emailSubject", msg.subject());
+                    ewsMeta.put("emailRule", matchedRule.getRuleName());
+                    ewsMeta.put("emailConfig", config.getName());
+                    ewsMeta.put("ingestedAt", Instant.now().toString());
+                    ewsMeta.put("emailProtocol", "EWS");
+
+                    UUID targetFolder = matchedRule.getTargetFolderId() != null
+                            ? matchedRule.getTargetFolderId()
+                            : config.getTargetFolderId();
+
+                    // Create parent email document
+                    String emailBody = "[EWS Email] From: " + msg.from() + "\nSubject: " + msg.subject();
+                    Document parentDoc = saveEmailParentDocument(
+                            emailBody.getBytes("UTF-8"),
+                            msg.subject() + ".txt", "text/plain",
+                            config, matchedRule, msg.from(), msg.subject(),
+                            ewsMeta, null, targetFolder);
+                    ingested++;
+
+                    // Get attachment info and save as children
                     List<EwsAttachmentInfo> attachments = ewsClient.getAttachmentInfo(
                             httpClient, config.getEwsUrl(), msg.itemId(), msg.changeKey());
 
@@ -109,8 +132,11 @@ public class EmailIngestionService {
                         try {
                             EwsAttachmentContent content = ewsClient.downloadAttachment(
                                     httpClient, config.getEwsUrl(), att.id());
-                            saveEmailAsDocument(content.data(), content.name(), content.contentType(),
-                                    config, matchedRule, msg.from(), msg.subject());
+                            Map<String, Object> attMeta = new LinkedHashMap<>(ewsMeta);
+                            attMeta.put("attachmentFileName", content.name());
+                            saveAttachmentDocument(content.data(), content.name(), content.contentType(),
+                                    config, matchedRule, msg.from(), msg.subject(),
+                                    parentDoc.getId(), attMeta, targetFolder);
                             ingested++;
                         } catch (Exception e) {
                             log.warn("Failed to download EWS attachment '{}': {}", att.name(), e.getMessage());
@@ -149,6 +175,12 @@ public class EmailIngestionService {
         props.put("mail." + protocol + ".ssl.enable", String.valueOf(ssl));
         props.put("mail." + protocol + ".timeout", "15000");
         props.put("mail." + protocol + ".connectiontimeout", "15000");
+        // Trust all SSL certificates (needed for Gmail and other public IMAP servers in
+        // Docker)
+        if (ssl) {
+            props.put("mail." + protocol + ".ssl.trust", "*");
+            props.put("mail." + protocol + ".ssl.checkserveridentity", "false");
+        }
 
         Store store = null;
         jakarta.mail.Folder folder = null;
@@ -180,19 +212,38 @@ public class EmailIngestionService {
                     log.info("Rule '{}' matched email from='{}' subject='{}'", matchedRule.getRuleName(), from,
                             subject);
 
-                    // Extract and ingest attachments
-                    int attachments = processAttachments(message, config, matchedRule, from, subject);
+                    // Extract rich email metadata
+                    Map<String, Object> emailMeta = extractEmailMetadata(message, from, subject, config, matchedRule);
+                    String messageId = extractMessageId(message);
+
+                    // Skip if this email was already ingested (by Message-ID)
+                    if (messageId != null && documentRepository.findByEmailMessageId(messageId).isPresent()) {
+                        log.info("Email already ingested (Message-ID={}), skipping", messageId);
+                        message.setFlag(Flags.Flag.FLAGGED, true);
+                        continue;
+                    }
+
+                    // --- Create parent email document (the email itself as .eml-like text) ---
+                    String body = extractTextBody(message);
+                    String emailContent = buildEmailSummary(from, subject, message, body);
+                    UUID targetFolder = matchedRule.getTargetFolderId() != null
+                            ? matchedRule.getTargetFolderId()
+                            : config.getTargetFolderId();
+
+                    Document parentDoc = saveEmailParentDocument(
+                            emailContent.getBytes("UTF-8"),
+                            subject + ".txt", "text/plain",
+                            config, matchedRule, from, subject,
+                            emailMeta, messageId, targetFolder);
+                    ingested++;
+
+                    // --- Extract and ingest attachments as children ---
+                    int attachments = processAttachmentsLinked(message, config, matchedRule,
+                            from, subject, parentDoc.getId(), emailMeta, targetFolder);
                     ingested += attachments;
 
-                    // If no attachments but rule matched, save the email body as a text document
-                    if (attachments == 0) {
-                        String body = extractTextBody(message);
-                        if (body != null && !body.isBlank()) {
-                            saveEmailAsDocument(body.getBytes("UTF-8"), subject + ".txt", "text/plain",
-                                    config, matchedRule, from, subject);
-                            ingested++;
-                        }
-                    }
+                    log.info("Ingested email '{}' with {} attachment(s), parentId={}",
+                            subject, attachments, parentDoc.getId());
 
                     // Mark as processed
                     message.setFlag(Flags.Flag.FLAGGED, true);
@@ -213,12 +264,29 @@ public class EmailIngestionService {
     }
 
     private EmailIngestionRule matchRules(List<EmailIngestionRule> rules, String from, String subject, Message msg) {
-        boolean hasAtt = false;
-        try {
-            hasAtt = msg.getContentType() != null && msg.getContentType().toLowerCase().contains("multipart");
-        } catch (Exception ignored) {
-        }
+        boolean hasAtt = hasRealAttachments(msg);
         return matchRulesSimple(rules, from, subject, hasAtt);
+    }
+
+    /**
+     * Check if a message has real file attachments (not just inline HTML parts).
+     */
+    private boolean hasRealAttachments(Message msg) {
+        try {
+            Object content = msg.getContent();
+            if (content instanceof MimeMultipart multipart) {
+                for (int i = 0; i < multipart.getCount(); i++) {
+                    BodyPart part = multipart.getBodyPart(i);
+                    if (Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition()) ||
+                            (part.getFileName() != null && !part.getFileName().isBlank())) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Could not check attachments: {}", e.getMessage());
+        }
+        return false;
     }
 
     private EmailIngestionRule matchRulesSimple(List<EmailIngestionRule> rules, String from, String subject,
@@ -263,8 +331,9 @@ public class EmailIngestionService {
         return rule;
     }
 
-    private int processAttachments(Message message, EmailIngestionConfig config, EmailIngestionRule rule,
-            String from, String subject) throws Exception {
+    private int processAttachmentsLinked(Message message, EmailIngestionConfig config, EmailIngestionRule rule,
+            String from, String subject, UUID parentDocId, Map<String, Object> emailMeta,
+            UUID targetFolder) throws Exception {
         int count = 0;
         Object content = message.getContent();
         if (content instanceof MimeMultipart multipart) {
@@ -281,7 +350,15 @@ public class EmailIngestionService {
                         mimeType = mimeType.split(";")[0].trim();
 
                     byte[] data = readBytes(part.getInputStream());
-                    saveEmailAsDocument(data, fileName, mimeType, config, rule, from, subject);
+
+                    // Build attachment-specific metadata
+                    Map<String, Object> attMeta = new LinkedHashMap<>(emailMeta);
+                    attMeta.put("attachmentFileName", fileName);
+                    attMeta.put("attachmentIndex", i);
+                    attMeta.put("attachmentSize", data.length);
+
+                    saveAttachmentDocument(data, fileName, mimeType, config, rule, from, subject,
+                            parentDocId, attMeta, targetFolder);
                     count++;
                 }
             }
@@ -289,41 +366,34 @@ public class EmailIngestionService {
         return count;
     }
 
-    private void saveEmailAsDocument(byte[] data, String fileName, String mimeType,
+    /** Save the parent email document (email body as text). */
+    private Document saveEmailParentDocument(byte[] data, String fileName, String mimeType,
             EmailIngestionConfig config, EmailIngestionRule rule,
-            String from, String subject) throws Exception {
+            String from, String subject,
+            Map<String, Object> emailMeta, String messageId,
+            UUID targetFolder) throws Exception {
         String sha256 = storageService.calculateSha256(data);
         String objectGuid = UUID.randomUUID().toString().replace("-", "");
-        String extension = getExtension(fileName);
         String storageKey = String.format("documents/%s/v1/%s", objectGuid, fileName);
 
         storageService.storeFile(data, storageKey, mimeType);
-
-        // Determine target folder: rule override > config default > null
-        UUID targetFolder = rule.getTargetFolderId() != null ? rule.getTargetFolderId() : config.getTargetFolderId();
-
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("source", "email");
-        metadata.put("emailFrom", from);
-        metadata.put("emailSubject", subject);
-        metadata.put("emailRule", rule.getRuleName());
-        metadata.put("emailConfig", config.getName());
-        metadata.put("ingestedAt", Instant.now().toString());
 
         Document doc = Document.builder()
                 .objectGuid(objectGuid)
                 .folderId(targetFolder)
                 .projectId(config.getProjectId())
-                .title("[Email] " + subject + " — " + fileName)
-                .description("Ingested from email via rule '" + rule.getRuleName() + "'. From: " + from)
+                .title("[Email] " + subject)
+                .description("Email from: " + from + " | Ingested via rule '" + rule.getRuleName() + "'")
                 .mimeType(mimeType)
-                .fileExtension(extension)
+                .fileExtension(getExtension(fileName))
                 .sha256Hash(sha256)
                 .fileSizeBytes((long) data.length)
                 .storageKey(storageKey)
                 .authorId(config.getCreatedBy())
-                .tags(new String[] { "email-ingested", rule.getRuleName().toLowerCase().replace(" ", "-") })
-                .metadataJson(metadata)
+                .emailMessageId(messageId)
+                .tags(new String[] { "email-ingested", "email-parent",
+                        rule.getRuleName().toLowerCase().replace(" ", "-") })
+                .metadataJson(emailMeta)
                 .retentionPeriodYears(20)
                 .retentionStartDate(Instant.now())
                 .build();
@@ -337,14 +407,220 @@ public class EmailIngestionService {
                 .fileSizeBytes((long) data.length)
                 .storageKey(storageKey)
                 .authorId(config.getCreatedBy())
-                .changeSummary("Ingested from email — " + from)
+                .changeSummary("Email ingested from " + from)
                 .build();
         versionRepository.save(version);
 
-        // Queue for search indexing (which also triggers PII scan)
         searchIndexPublisher.publishIndex(doc, data);
+        log.info("Saved parent email document: {} ({} bytes)", doc.getTitle(), data.length);
+        return doc;
+    }
 
-        log.info("Saved email document: {} ({} bytes)", doc.getTitle(), data.length);
+    /** Save an attachment document linked to its parent email. */
+    private void saveAttachmentDocument(byte[] data, String fileName, String mimeType,
+            EmailIngestionConfig config, EmailIngestionRule rule,
+            String from, String subject,
+            UUID parentDocId, Map<String, Object> attMeta,
+            UUID targetFolder) throws Exception {
+        String sha256 = storageService.calculateSha256(data);
+        String objectGuid = UUID.randomUUID().toString().replace("-", "");
+        String storageKey = String.format("documents/%s/v1/%s", objectGuid, fileName);
+
+        storageService.storeFile(data, storageKey, mimeType);
+
+        Document doc = Document.builder()
+                .objectGuid(objectGuid)
+                .folderId(targetFolder)
+                .projectId(config.getProjectId())
+                .title("[Attachment] " + fileName + " — from: " + subject)
+                .description("Email attachment from: " + from + " | Subject: " + subject)
+                .mimeType(mimeType)
+                .fileExtension(getExtension(fileName))
+                .sha256Hash(sha256)
+                .fileSizeBytes((long) data.length)
+                .storageKey(storageKey)
+                .authorId(config.getCreatedBy())
+                .parentDocumentId(parentDocId)
+                .tags(new String[] { "email-ingested", "email-attachment",
+                        rule.getRuleName().toLowerCase().replace(" ", "-") })
+                .metadataJson(attMeta)
+                .retentionPeriodYears(20)
+                .retentionStartDate(Instant.now())
+                .build();
+
+        doc = documentRepository.save(doc);
+
+        DocumentVersion version = DocumentVersion.builder()
+                .document(doc)
+                .versionNumber(1)
+                .sha256Hash(sha256)
+                .fileSizeBytes((long) data.length)
+                .storageKey(storageKey)
+                .authorId(config.getCreatedBy())
+                .changeSummary("Email attachment from " + from + " — " + subject)
+                .build();
+        versionRepository.save(version);
+
+        searchIndexPublisher.publishIndex(doc, data);
+        log.info("Saved attachment document: {} ({} bytes) -> parent={}", doc.getTitle(), data.length, parentDocId);
+    }
+
+    /* ─── Metadata extraction helpers ─── */
+
+    /** Extract rich metadata from an email message. */
+    private Map<String, Object> extractEmailMetadata(Message message, String from, String subject,
+            EmailIngestionConfig config, EmailIngestionRule rule) {
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("source", "email");
+        meta.put("emailFrom", from);
+        meta.put("emailSubject", subject);
+        meta.put("emailRule", rule.getRuleName());
+        meta.put("emailConfig", config.getName());
+        meta.put("ingestedAt", Instant.now().toString());
+
+        try {
+            // Date sent
+            if (message.getSentDate() != null) {
+                meta.put("emailDate", message.getSentDate().toInstant().toString());
+            }
+            // Date received
+            if (message.getReceivedDate() != null) {
+                meta.put("emailReceivedDate", message.getReceivedDate().toInstant().toString());
+            }
+            // Message-ID
+            String messageId = extractMessageId(message);
+            if (messageId != null) {
+                meta.put("emailMessageId", messageId);
+            }
+            // To recipients
+            Address[] toAddrs = message.getRecipients(Message.RecipientType.TO);
+            if (toAddrs != null && toAddrs.length > 0) {
+                StringBuilder toList = new StringBuilder();
+                for (Address addr : toAddrs) {
+                    if (toList.length() > 0)
+                        toList.append(", ");
+                    if (addr instanceof InternetAddress ia) {
+                        toList.append(ia.getAddress());
+                    } else {
+                        toList.append(addr.toString());
+                    }
+                }
+                meta.put("emailTo", toList.toString());
+            }
+            // CC recipients
+            Address[] ccAddrs = message.getRecipients(Message.RecipientType.CC);
+            if (ccAddrs != null && ccAddrs.length > 0) {
+                StringBuilder ccList = new StringBuilder();
+                for (Address addr : ccAddrs) {
+                    if (ccList.length() > 0)
+                        ccList.append(", ");
+                    if (addr instanceof InternetAddress ia) {
+                        ccList.append(ia.getAddress());
+                    } else {
+                        ccList.append(addr.toString());
+                    }
+                }
+                meta.put("emailCc", ccList.toString());
+            }
+            // Reply-To
+            Address[] replyTo = message.getReplyTo();
+            if (replyTo != null && replyTo.length > 0 && replyTo[0] instanceof InternetAddress ia) {
+                meta.put("emailReplyTo", ia.getAddress());
+            }
+            // Content type
+            meta.put("emailContentType", message.getContentType());
+            // Attachment count
+            int attCount = countRealAttachments(message);
+            meta.put("emailAttachmentCount", attCount);
+            meta.put("emailHasAttachments", attCount > 0);
+        } catch (Exception e) {
+            log.debug("Could not extract some email metadata: {}", e.getMessage());
+        }
+        return meta;
+    }
+
+    /** Extract the Message-ID header from an email. */
+    private String extractMessageId(Message message) {
+        try {
+            String[] headers = message.getHeader("Message-ID");
+            if (headers != null && headers.length > 0) {
+                return headers[0].trim();
+            }
+        } catch (Exception e) {
+            log.debug("Could not extract Message-ID: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /** Count the number of real file attachments in a message. */
+    private int countRealAttachments(Message message) {
+        int count = 0;
+        try {
+            Object content = message.getContent();
+            if (content instanceof MimeMultipart multipart) {
+                for (int i = 0; i < multipart.getCount(); i++) {
+                    BodyPart part = multipart.getBodyPart(i);
+                    if (Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition()) ||
+                            (part.getFileName() != null && !part.getFileName().isBlank())) {
+                        count++;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return count;
+    }
+
+    /** Build a human-readable email summary for the parent document content. */
+    private String buildEmailSummary(String from, String subject, Message message, String body) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("═══════════════════════════════════════════\n");
+        sb.append("  EMAIL DOCUMENT\n");
+        sb.append("═══════════════════════════════════════════\n\n");
+        sb.append("From:    ").append(from).append("\n");
+        try {
+            Address[] toAddrs = message.getRecipients(Message.RecipientType.TO);
+            if (toAddrs != null) {
+                sb.append("To:      ");
+                for (int i = 0; i < toAddrs.length; i++) {
+                    if (i > 0)
+                        sb.append(", ");
+                    sb.append(toAddrs[i].toString());
+                }
+                sb.append("\n");
+            }
+            Address[] ccAddrs = message.getRecipients(Message.RecipientType.CC);
+            if (ccAddrs != null && ccAddrs.length > 0) {
+                sb.append("CC:      ");
+                for (int i = 0; i < ccAddrs.length; i++) {
+                    if (i > 0)
+                        sb.append(", ");
+                    sb.append(ccAddrs[i].toString());
+                }
+                sb.append("\n");
+            }
+            if (message.getSentDate() != null) {
+                sb.append("Date:    ").append(message.getSentDate().toString()).append("\n");
+            }
+            String msgId = extractMessageId(message);
+            if (msgId != null) {
+                sb.append("Msg-ID:  ").append(msgId).append("\n");
+            }
+        } catch (Exception ignored) {
+        }
+        sb.append("Subject: ").append(subject).append("\n");
+        int attCount = countRealAttachments(message);
+        if (attCount > 0) {
+            sb.append("Attachments: ").append(attCount).append(" file(s)\n");
+        }
+        sb.append("\n───────────────────────────────────────────\n\n");
+        if (body != null && !body.isBlank()) {
+            sb.append(body);
+        } else {
+            sb.append("[No text content available]");
+        }
+        sb.append("\n\n═══════════════════════════════════════════\n");
+        return sb.toString();
     }
 
     private String extractSender(Message message) throws MessagingException {

@@ -42,7 +42,7 @@ spring:
         - id: document-service
           uri: http://${DOCUMENT_SERVICE_HOST:localhost}:${DOCUMENT_SERVICE_PORT:8082}
           predicates:
-            - Path=/api/documents/**, /api/folders/**, /api/notes/**, /api/email-ingestion/**
+            - Path=/api/documents/**, /api/folders/**, /api/notes/**, /api/email-ingestion/**, /api/intake/**, /api/sap/**, /api/sap-mock/**, /api/agentic/**, /api/federated/**, /api/vendor-portals/**, /api/public/**, /api/cases/**, /api/sustainability/**
           filters:
             - StripPrefix=1
             - name: RequestSize
@@ -111,12 +111,15 @@ spring:
             - Path=/api/search/**
           filters:
             - StripPrefix=1
+          metadata:
+            response-timeout: 180000
+            connect-timeout: 5000
 
         # Retention Service
         - id: retention-service
           uri: http://${RETENTION_SERVICE_HOST:localhost}:${RETENTION_SERVICE_PORT:8085}
           predicates:
-            - Path=/api/retention/**, /api/disposition/**
+            - Path=/api/retention/**, /api/disposition/**, /api/compliance/**
           filters:
             - StripPrefix=1
 

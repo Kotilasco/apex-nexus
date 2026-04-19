@@ -49,8 +49,11 @@ public class DocumentDto {
     private String m365Link;
     private String docusignEnvelopeId;
     private String sapDocumentNumber;
+    private Map<String, Object> extractedEntities;
     private Boolean aiGenerated;
     private BigDecimal aiConfidence;
+    private UUID parentDocumentId;
+    private String emailMessageId;
     private String[] tags;
     private Map<String, Object> metadata;
     private List<DocumentVersionDto> versions;

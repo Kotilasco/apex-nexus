@@ -69,11 +69,17 @@ export default function CompliancePage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Compliance & Jurisdiction Rules</h1>
-        <p className="text-slate-500 mt-1">
-          Country-specific retention requirements and legal frameworks
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Compliance & Jurisdiction Rules</h1>
+          <p className="text-slate-500 mt-1">
+            Country-specific retention requirements and legal frameworks
+          </p>
+        </div>
+        <a href="/compliance/potraz"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-yellow-500 text-white rounded-lg hover:opacity-90 shadow-sm font-medium text-sm">
+          🇿🇼 Open POTRAZ Compliance Suite →
+        </a>
       </div>
 
       {/* Jurisdiction cards */}

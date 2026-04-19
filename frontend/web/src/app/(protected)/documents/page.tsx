@@ -10,7 +10,10 @@ import {
   projectApi,
   signatureApi,
   authApi,
-  aiApi
+  aiApi,
+  documentConversationApi,
+  presenceApi,
+  searchApi
 } from "@/lib/api";
 import type { WorkflowDefinition, WorkflowInstance } from "@/lib/types";
 import { useProjectStore } from "@/lib/project-store";
@@ -47,14 +50,18 @@ import {
   FolderInput,
   Clock,
   User,
+  Users,
   MessageSquare,
-  Sparkles
+  Sparkles,
+  Bookmark,
+  Check
 } from "lucide-react";
 import UploadModal from "@/components/documents/UploadModal";
 import NotesPanel from "@/components/documents/NotesPanel";
 import VersionsPanel from "@/components/documents/VersionsPanel";
 import DocumentRetentionPanel from "@/components/documents/DocumentRetentionPanel";
 import SignaturePanel from "@/components/documents/SignaturePanel";
+import NotarizationBadge from "@/components/documents/NotarizationBadge";
 import AppDialog from "@/components/ui/AppDialog";
 import type { DialogVariant } from "@/components/ui/AppDialog";
 import { useAuthStore } from "@/lib/auth-store";
@@ -90,6 +97,19 @@ export default function DocumentsPage() {
   const [newFolderName, setNewFolderName] = useState("");
   const [contextMenu, setContextMenu] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // ── Presence (who is currently viewing the selected doc) ──
+  const [viewers, setViewers] = useState<
+    Array<{ userId: string; username: string; displayName: string }>
+  >([]);
+  const presenceTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Document Links (cross-document relationships) ──
+  const [docLinks, setDocLinks] = useState<any[]>([]);
+  const [showLinkPicker, setShowLinkPicker] = useState(false);
+  const [linkPickerQuery, setLinkPickerQuery] = useState("");
+  const [linkPickerResults, setLinkPickerResults] = useState<Document[]>([]);
+  const [linkPickerType, setLinkPickerType] = useState("RELATED");
 
   // ── Editing / Lock / Heartbeat state ──
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
@@ -136,6 +156,10 @@ export default function DocumentsPage() {
   const [myCheckouts, setMyCheckouts] = useState<Document[]>([]);
   const [checkoutsLoading, setCheckoutsLoading] = useState(false);
 
+  // ── Email child documents (attachments linked to parent email) ──
+  const [emailChildren, setEmailChildren] = useState<Document[]>([]);
+  const [emailParent, setEmailParent] = useState<Document | null>(null);
+
   const loadMyCheckouts = useCallback(async () => {
     setCheckoutsLoading(true);
     try {
@@ -154,6 +178,7 @@ export default function DocumentsPage() {
     null
   );
   const [preCheckLoading, setPreCheckLoading] = useState(false);
+  const [standaloneCheckinDocId, setStandaloneCheckinDocId] = useState<string | null>(null);
 
   // Context menu positioning
   const [contextMenuPos, setContextMenuPos] = useState<{
@@ -171,6 +196,7 @@ export default function DocumentsPage() {
 
   // Text editing state
   const [textContent, setTextContent] = useState<string | null>(null);
+  const [piiMasked, setPiiMasked] = useState(false);
   const [redactedContent, setRedactedContent] = useState<string | null>(null);
   const [showOriginal, setShowOriginal] = useState(false);
   const [isTextEditing, setIsTextEditing] = useState(false);
@@ -277,6 +303,24 @@ export default function DocumentsPage() {
     }
   };
 
+  // Launch Office app via hidden iframe — most reliable cross-browser method
+  const launchOfficeProtocol = (url: string) => {
+    console.log("[Edit] Launching Office protocol:", url);
+    // Method 1: Try hidden iframe (works in Chrome, Edge, Firefox)
+    try {
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = url;
+      document.body.appendChild(iframe);
+      setTimeout(() => {
+        try { document.body.removeChild(iframe); } catch { /* already removed */ }
+      }, 5000);
+    } catch {
+      // Method 2: Fallback to window.location
+      window.location.href = url;
+    }
+  };
+
   const openInOfficeApp = async (docId: string, mime: string) => {
     const mapping = OFFICE_MIME_MAP[mime];
     if (!mapping) return;
@@ -289,10 +333,12 @@ export default function DocumentsPage() {
       );
       const apiBase =
         process.env.NEXT_PUBLIC_API_URL ||
-        `${window.location.protocol}//${window.location.hostname}:9600/api`;
+        `${window.location.protocol}//${window.location.hostname}:8200/api`;
       const webdavUrl = `${apiBase}/webdav/documents/${docId}/${filename}?access_token=${tokenData.accessToken}`;
       const officeUrl = `${mapping.protocol}:ofe|u|${webdavUrl}`;
       setWordUrl(officeUrl);
+      // Auto-launch Word immediately
+      launchOfficeProtocol(officeUrl);
     } catch (e) {
       console.warn(`[Edit] Failed to generate ${mapping.label} URL:`, e);
       showDialog(
@@ -308,6 +354,33 @@ export default function DocumentsPage() {
       docId,
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     );
+  };
+
+  // ── Open in WPS Office: download file so the OS default handler (WPS) opens it ──
+  const openInWps = async (docId: string) => {
+    try {
+      const res = await documentApi.download(docId);
+      const blob = res.data;
+      const title = selectedDoc?.title || "document";
+      const ext = OFFICE_MIME_MAP[selectedDoc?.mimeType || ""]?.ext || ".docx";
+      const filename = title.toLowerCase().endsWith(ext) ? title : title + ext;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      showDialog(
+        "Opening in WPS Office",
+        `"${filename}" has been downloaded. It should open automatically in WPS Office.\n\nEdit the file locally, then use the Check In button to upload your changes.`,
+        "info"
+      );
+    } catch (e) {
+      console.warn("[Edit] Failed to download for WPS:", e);
+      showDialog("Download Failed", "Could not download the document for WPS Office.", "error");
+    }
   };
 
   const handleEditInWord = async (doc: Document) => {
@@ -434,7 +507,9 @@ export default function DocumentsPage() {
   };
 
   const handlePreCheckConfirm = async () => {
-    if (pendingCheckinFile) {
+    if (pendingCheckinFile && standaloneCheckinDocId) {
+      await performStandaloneCheckin(standaloneCheckinDocId, pendingCheckinFile);
+    } else if (pendingCheckinFile) {
       await performCheckin(pendingCheckinFile);
     }
   };
@@ -442,6 +517,7 @@ export default function DocumentsPage() {
   const handlePreCheckCancel = () => {
     setPreCheckResult(null);
     setPendingCheckinFile(null);
+    setStandaloneCheckinDocId(null);
   };
 
   // ── Cancel Edit: Release lock without checking in ──
@@ -459,7 +535,7 @@ export default function DocumentsPage() {
           setDialogOpen(false);
           try {
             await lockApi.release(editingDocId);
-          } catch {} // best-effort
+          } catch { } // best-effort
           stopHeartbeat();
           setEditingDocId(null);
           setLockToken(null);
@@ -469,6 +545,50 @@ export default function DocumentsPage() {
         }
       }
     );
+  };
+
+  // ── Done: WebDAV auto-saves have already persisted — just release lock & refresh.
+  //    Works for Word (auto-save via WebDAV) and any editor that writes back to the
+  //    WebDAV URL. For WPS/downloaded copies the user should still use "Check In".
+  const handleDoneEditing = async () => {
+    if (!editingDocId) return;
+    const docId = editingDocId;
+    try {
+      // Fetch latest doc state so we can show the user the final version number
+      // that was captured from their Word auto-saves.
+      let finalVersion: number | string = "latest";
+      try {
+        const res = await documentApi.get(docId);
+        const data = res.data?.data ?? res.data;
+        if (data?.currentVersion != null) finalVersion = data.currentVersion;
+      } catch { /* best-effort */ }
+
+      try {
+        await lockApi.release(docId);
+      } catch { /* best-effort */ }
+
+      stopHeartbeat();
+      setEditingDocId(null);
+      setLockToken(null);
+      setWordUrl(null);
+      setEditElapsed("");
+      setHeartbeatCount(0);
+      loadData();
+
+      showDialog(
+        "Done — Changes Captured",
+        `Your edits were auto-saved via WebDAV. The document is now at version ${finalVersion}.\n\n` +
+        `If you were editing via WPS or a downloaded copy, use "Check In" instead to upload your file.`,
+        "success"
+      );
+    } catch (err) {
+      console.error("[Done] failed:", err);
+      showDialog(
+        "Done Failed",
+        "Failed to finalize the edit session. Please try again or use Cancel Edit.",
+        "error"
+      );
+    }
   };
 
   // ── Text editing helpers ──
@@ -611,6 +731,7 @@ export default function DocumentsPage() {
         .then((res) => {
           const data = res.data?.data ?? res.data;
           setTextContent(data?.content ?? "");
+          setPiiMasked(!!data?.piiMasked);
         })
         .catch(() => setTextContent(null));
       return;
@@ -634,6 +755,147 @@ export default function DocumentsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDoc?.id, showNotes, showVersions, showOriginal]);
 
+  // Load email children (attachments) or parent when selectedDoc is an email document
+  useEffect(() => {
+    if (!selectedDoc) {
+      setEmailChildren([]);
+      setEmailParent(null);
+      return;
+    }
+    const meta = selectedDoc.metadata as Record<string, unknown> | undefined;
+    const isEmailDoc = meta?.source === "email";
+    if (!isEmailDoc) {
+      setEmailChildren([]);
+      setEmailParent(null);
+      return;
+    }
+    // If this is a parent email doc, load its children (attachments)
+    if (!selectedDoc.parentDocumentId) {
+      documentApi.getChildren(selectedDoc.id).then(res => {
+        const data = res.data?.data ?? res.data ?? [];
+        setEmailChildren(Array.isArray(data) ? data : []);
+      }).catch(() => setEmailChildren([]));
+      setEmailParent(null);
+    } else {
+      // This is a child attachment — load the parent email
+      setEmailChildren([]);
+      documentApi.get(selectedDoc.parentDocumentId).then(res => {
+        const data = res.data?.data ?? res.data;
+        setEmailParent(data ?? null);
+      }).catch(() => setEmailParent(null));
+    }
+  }, [selectedDoc?.id]);
+
+  // ── Presence: register heartbeat + poll viewers while detail panel open ──
+  useEffect(() => {
+    if (!selectedDoc?.id) {
+      setViewers([]);
+      if (presenceTickRef.current) {
+        clearInterval(presenceTickRef.current);
+        presenceTickRef.current = null;
+      }
+      return;
+    }
+    const docId = selectedDoc.id;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await presenceApi.heartbeat(
+          docId,
+          currentUser?.username,
+          currentUser?.fullName || currentUser?.username,
+        );
+        if (!cancelled) {
+          const data = res.data?.data ?? res.data;
+          setViewers(data?.viewers || []);
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    tick();
+    presenceTickRef.current = setInterval(tick, 20000);
+
+    return () => {
+      cancelled = true;
+      if (presenceTickRef.current) {
+        clearInterval(presenceTickRef.current);
+        presenceTickRef.current = null;
+      }
+      presenceApi.leave(docId).catch(() => {});
+    };
+  }, [selectedDoc?.id, currentUser?.username, currentUser?.fullName]);
+
+  // ── Document links: fetch when a doc is selected ──
+  useEffect(() => {
+    if (!selectedDoc?.id) {
+      setDocLinks([]);
+      return;
+    }
+    const docId = selectedDoc.id;
+    documentApi
+      .getLinks(docId)
+      .then((res: any) => {
+        const data = res.data?.data ?? res.data;
+        setDocLinks(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setDocLinks([]));
+  }, [selectedDoc?.id]);
+
+  const handleDeleteLink = async (linkId: string) => {
+    if (!selectedDoc) return;
+    if (!window.confirm("Remove this document link?")) return;
+    try {
+      await documentApi.deleteLink(selectedDoc.id, linkId);
+      setDocLinks(prev => prev.filter(l => l.id !== linkId));
+    } catch (e: any) {
+      alert(e?.response?.data?.message || "Failed to delete link");
+    }
+  };
+
+  const handleSearchLinkCandidates = async (q: string) => {
+    setLinkPickerQuery(q);
+    if (q.length < 2) {
+      setLinkPickerResults([]);
+      return;
+    }
+    try {
+      const res = await searchApi.quick(q, 0, 10);
+      const data = res.data?.data ?? res.data;
+      const hits = Array.isArray(data?.results) ? data.results : [];
+      setLinkPickerResults(
+        hits
+          .filter((h: any) => h.documentId && h.documentId !== selectedDoc?.id)
+          .map((h: any) => ({
+            id: h.documentId,
+            title: h.title,
+            description: h.description,
+            mimeType: h.mimeType,
+            status: h.status,
+          })) as any,
+      );
+    } catch {
+      setLinkPickerResults([]);
+    }
+  };
+
+  const handleCreateLink = async (targetId: string) => {
+    if (!selectedDoc) return;
+    try {
+      const res = await documentApi.createLink(selectedDoc.id, {
+        targetDocumentId: targetId,
+        linkType: linkPickerType,
+      });
+      const created = res.data?.data ?? res.data;
+      if (created) setDocLinks(prev => [...prev, created]);
+      setShowLinkPicker(false);
+      setLinkPickerQuery("");
+      setLinkPickerResults([]);
+    } catch (e: any) {
+      alert(e?.response?.data?.message || "Failed to create link");
+    }
+  };
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -642,11 +904,11 @@ export default function DocumentsPage() {
         [docRes, folderRes] = await Promise.all([
           currentFolder
             ? documentApi.listByProject(
-                activeProject.id,
-                currentFolder,
-                page,
-                20
-              )
+              activeProject.id,
+              currentFolder,
+              page,
+              20
+            )
             : documentApi.listByProject(activeProject.id, undefined, page, 20),
           documentApi.getFoldersByProject(activeProject.id, currentFolder)
         ]);
@@ -704,7 +966,7 @@ export default function DocumentsPage() {
         const doc = res.data?.data ?? res.data;
         if (doc) setSelectedDoc(doc);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [searchParams]);
 
   const navigateToFolder = (
@@ -805,6 +1067,100 @@ export default function DocumentsPage() {
       if (viewMode === "checkouts") loadMyCheckouts();
     } catch (err) {
       console.error("[Documents] cancel checkout failed:", err);
+    }
+  };
+
+  const handleToggleLegalHold = async (doc: Document) => {
+    try {
+      if (doc.legalHold) {
+        const confirmed = window.confirm(
+          `Release legal hold on "${doc.title}"?\n\nThe document will become subject to normal retention rules again.`,
+        );
+        if (!confirmed) return;
+        await documentApi.removeLegalHold(doc.id);
+      } else {
+        const reason = window.prompt(
+          `Place "${doc.title}" under LEGAL HOLD?\n\nEnter reason (e.g. matter number, case reference):`,
+          "",
+        );
+        if (reason === null) return;
+        if (!reason.trim()) {
+          alert("A reason is required to place a document under legal hold.");
+          return;
+        }
+        await documentApi.setLegalHold(doc.id, reason.trim());
+      }
+      // Refresh selected doc + list
+      const refreshed = await documentApi.get(doc.id);
+      const updated = refreshed.data?.data ?? refreshed.data;
+      if (updated && selectedDoc?.id === doc.id) setSelectedDoc(updated);
+      loadData();
+    } catch (err: any) {
+      console.error("[Documents] legal-hold toggle failed:", err);
+      alert(
+        err?.response?.data?.message ||
+          "Failed to toggle legal hold. You may not have permission.",
+      );
+    }
+  };
+
+  // ── Standalone Check In: upload a new version for a checked-out document (any file type) ──
+  const handleCheckinForCheckout = async (doc: Document) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+
+      // Run pre-check first
+      setPreCheckLoading(true);
+      try {
+        const precheckForm = new FormData();
+        precheckForm.append("file", file);
+        const res = await documentApi.checkinPrecheck(doc.id, precheckForm);
+        const result: VersionPreCheckResult = res.data?.data ?? res.data;
+
+        if (result && result.warnings && result.warnings.length > 0) {
+          setPreCheckResult(result);
+          setPendingCheckinFile(file);
+          // Store doc id for standalone checkin
+          setStandaloneCheckinDocId(doc.id);
+          setPreCheckLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("[PreCheck] failed, proceeding with check-in:", err);
+      }
+      setPreCheckLoading(false);
+
+      // No warnings — proceed directly
+      await performStandaloneCheckin(doc.id, file);
+    };
+    input.click();
+  };
+
+  const performStandaloneCheckin = async (docId: string, file: File) => {
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      await documentApi.checkin(docId, form);
+      setPreCheckResult(null);
+      setPendingCheckinFile(null);
+      setStandaloneCheckinDocId(null);
+      loadData();
+      if (viewMode === "checkouts") loadMyCheckouts();
+      showDialog(
+        "Check-In Successful",
+        "The document has been checked in with a new version.",
+        "success"
+      );
+    } catch (err) {
+      console.error("[Checkin] failed:", err);
+      showDialog(
+        "Check-In Failed",
+        "Failed to check in the document. Please check the console for details.",
+        "error"
+      );
     }
   };
 
@@ -961,7 +1317,7 @@ export default function DocumentsPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-emerald-800">
-                Editing document in Word
+                Editing document
               </p>
               <p className="text-xs text-emerald-600">
                 Lock held &middot; {editElapsed} &middot;{" "}
@@ -972,18 +1328,33 @@ export default function DocumentsPage() {
           </div>
           <div className="flex items-center gap-2">
             {wordUrl && (
-              <a
-                href={wordUrl}
+              <button
+                onClick={() => launchOfficeProtocol(wordUrl)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 flex items-center gap-2 font-semibold"
               >
                 📝 Open in Word
-              </a>
+              </button>
+            )}
+            {editingDocId && (
+              <button
+                onClick={() => openInWps(editingDocId)}
+                className="px-4 py-2 bg-cyan-600 text-white rounded-lg text-sm hover:bg-cyan-700 flex items-center gap-2 font-semibold"
+              >
+                📄 Open in WPS
+              </button>
             )}
             <button
               onClick={handleCheckinEdited}
               className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700 flex items-center gap-2"
             >
               <UploadCloud className="h-4 w-4" /> Check In
+            </button>
+            <button
+              onClick={handleDoneEditing}
+              title="I finished editing in Word/WebDAV — my saves are already captured. Release the lock."
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 flex items-center gap-2 font-semibold"
+            >
+              ✓ Done
             </button>
             <button
               onClick={handleCancelEdit}
@@ -1060,6 +1431,15 @@ export default function DocumentsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCheckinForCheckout(doc);
+                            }}
+                            className="px-3 py-1 text-xs border border-emerald-300 text-emerald-700 rounded-lg hover:bg-emerald-50 flex items-center gap-1"
+                          >
+                            <UploadCloud className="h-3 w-3" /> Check In
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1225,14 +1605,13 @@ export default function DocumentsPage() {
                                 )}
                                 {doc.piiDetected && (
                                   <span
-                                    className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                      doc.piiSeverity === "CRITICAL" ||
-                                      doc.piiSeverity === "HIGH"
+                                    className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${doc.piiSeverity === "CRITICAL" ||
+                                        doc.piiSeverity === "HIGH"
                                         ? "bg-red-100 text-red-700"
                                         : doc.piiSeverity === "MEDIUM"
                                           ? "bg-amber-100 text-amber-700"
                                           : "bg-yellow-100 text-yellow-700"
-                                    }`}
+                                      }`}
                                     title={`PII detected: ${doc.piiTypes || "Unknown"} (${doc.piiSeverity})`}
                                   >
                                     🔒 PII
@@ -1250,15 +1629,14 @@ export default function DocumentsPage() {
                         </td>
                         <td className="px-4 py-3 hidden lg:table-cell">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                              doc.status === "ACTIVE"
+                            className={`px-2 py-0.5 rounded-full text-xs font-medium ${doc.status === "ACTIVE"
                                 ? "bg-green-100 text-green-700"
                                 : doc.status === "DRAFT"
                                   ? "bg-slate-100 text-slate-600"
                                   : doc.status === "ARCHIVED"
                                     ? "bg-blue-100 text-blue-700"
                                     : "bg-red-100 text-red-700"
-                            }`}
+                              }`}
                           >
                             {doc.status}
                           </span>
@@ -1359,16 +1737,28 @@ export default function DocumentsPage() {
                           <Lock className="h-4 w-4 mr-2" /> Check Out
                         </button>
                       ) : doc.checkedOutBy === currentUser?.id ? (
-                        <button
-                          onClick={() => {
-                            handleCancelCheckout(doc);
-                            setContextMenu(null);
-                            setContextMenuPos(null);
-                          }}
-                          className="flex items-center w-full px-3 py-2 text-sm hover:bg-slate-50"
-                        >
-                          <Unlock className="h-4 w-4 mr-2" /> Cancel Checkout
-                        </button>
+                        <>
+                          <button
+                            onClick={() => {
+                              handleCheckinForCheckout(doc);
+                              setContextMenu(null);
+                              setContextMenuPos(null);
+                            }}
+                            className="flex items-center w-full px-3 py-2 text-sm hover:bg-slate-50"
+                          >
+                            <UploadCloud className="h-4 w-4 mr-2" /> Check In
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleCancelCheckout(doc);
+                              setContextMenu(null);
+                              setContextMenuPos(null);
+                            }}
+                            className="flex items-center w-full px-3 py-2 text-sm hover:bg-slate-50"
+                          >
+                            <Unlock className="h-4 w-4 mr-2" /> Cancel Checkout
+                          </button>
+                        </>
                       ) : (
                         <div className="px-3 py-2 text-xs text-amber-600 flex items-center gap-2">
                           <Lock className="h-3.5 w-3.5" />
@@ -1875,10 +2265,43 @@ export default function DocumentsPage() {
               onClick={() => setSelectedDoc(null)}
             />
             <div className="relative w-3/4 bg-white shadow-xl flex flex-col h-full animate-in slide-in-from-right">
-              <div className="flex items-center justify-between p-4 border-b border-slate-200">
-                <h2 className="font-semibold text-slate-900 truncate">
+              <div className="flex items-center justify-between p-4 border-b border-slate-200 gap-3">
+                <h2 className="font-semibold text-slate-900 truncate flex-1">
                   {selectedDoc.title}
                 </h2>
+                <NotarizationBadge documentId={selectedDoc.id} />
+                {/* Presence avatars — always visible in header */}
+                {viewers.length > 0 && (
+                  <div className="flex items-center -space-x-2 shrink-0" title={`${viewers.length} viewing now`}>
+                    {viewers.slice(0, 5).map((v) => {
+                      const initials = (v.displayName || v.username || "?")
+                        .split(/\s+/)
+                        .map((p) => p[0])
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .join("")
+                        .toUpperCase();
+                      const hue = (v.userId || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+                      const isMe = v.userId === currentUser?.id;
+                      return (
+                        <div
+                          key={v.userId}
+                          title={`${v.displayName || v.username}${isMe ? " (you)" : ""}`}
+                          className={`relative h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white ring-2 ${isMe ? "ring-emerald-500" : "ring-white"}`}
+                          style={{ backgroundColor: `hsl(${hue},60%,45%)` }}
+                        >
+                          {initials}
+                          <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-white" />
+                        </div>
+                      );
+                    })}
+                    {viewers.length > 5 && (
+                      <div className="h-8 w-8 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
+                        +{viewers.length - 5}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <button
                   onClick={() => setSelectedDoc(null)}
                   className="p-1 rounded hover:bg-slate-100 text-slate-400"
@@ -1890,61 +2313,56 @@ export default function DocumentsPage() {
                 {/* ── PII Warning Banner ── */}
                 {selectedDoc.piiDetected && (
                   <div
-                    className={`rounded-lg p-3 flex items-start gap-3 ${
-                      selectedDoc.piiSeverity === "CRITICAL"
+                    className={`rounded-lg p-3 flex items-start gap-3 ${selectedDoc.piiSeverity === "CRITICAL"
                         ? "bg-red-50 border border-red-300"
                         : selectedDoc.piiSeverity === "HIGH"
                           ? "bg-red-50 border border-red-200"
                           : selectedDoc.piiSeverity === "MEDIUM"
                             ? "bg-amber-50 border border-amber-200"
                             : "bg-yellow-50 border border-yellow-200"
-                    }`}
+                      }`}
                   >
                     <Shield
-                      className={`h-5 w-5 flex-shrink-0 mt-0.5 ${
-                        selectedDoc.piiSeverity === "CRITICAL" ||
-                        selectedDoc.piiSeverity === "HIGH"
+                      className={`h-5 w-5 flex-shrink-0 mt-0.5 ${selectedDoc.piiSeverity === "CRITICAL" ||
+                          selectedDoc.piiSeverity === "HIGH"
                           ? "text-red-600"
                           : selectedDoc.piiSeverity === "MEDIUM"
                             ? "text-amber-600"
                             : "text-yellow-600"
-                      }`}
+                        }`}
                     />
                     <div className="flex-1 min-w-0">
                       <p
-                        className={`text-sm font-semibold ${
-                          selectedDoc.piiSeverity === "CRITICAL" ||
-                          selectedDoc.piiSeverity === "HIGH"
+                        className={`text-sm font-semibold ${selectedDoc.piiSeverity === "CRITICAL" ||
+                            selectedDoc.piiSeverity === "HIGH"
                             ? "text-red-800"
                             : selectedDoc.piiSeverity === "MEDIUM"
                               ? "text-amber-800"
                               : "text-yellow-800"
-                        }`}
+                          }`}
                       >
                         ⚠ Sensitive Information Detected
                         <span
-                          className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                            selectedDoc.piiSeverity === "CRITICAL"
+                          className={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${selectedDoc.piiSeverity === "CRITICAL"
                               ? "bg-red-200 text-red-800"
                               : selectedDoc.piiSeverity === "HIGH"
                                 ? "bg-red-100 text-red-700"
                                 : selectedDoc.piiSeverity === "MEDIUM"
                                   ? "bg-amber-100 text-amber-700"
                                   : "bg-yellow-100 text-yellow-700"
-                          }`}
+                            }`}
                         >
                           {selectedDoc.piiSeverity}
                         </span>
                       </p>
                       <p
-                        className={`text-xs mt-1 ${
-                          selectedDoc.piiSeverity === "CRITICAL" ||
-                          selectedDoc.piiSeverity === "HIGH"
+                        className={`text-xs mt-1 ${selectedDoc.piiSeverity === "CRITICAL" ||
+                            selectedDoc.piiSeverity === "HIGH"
                             ? "text-red-600"
                             : selectedDoc.piiSeverity === "MEDIUM"
                               ? "text-amber-600"
                               : "text-yellow-600"
-                        }`}
+                          }`}
                       >
                         This document contains personally identifiable
                         information (PII):{" "}
@@ -2066,51 +2484,51 @@ export default function DocumentsPage() {
                 {(selectedDoc.mimeType ===
                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
                   selectedDoc.mimeType === "application/vnd.ms-excel") && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-8 flex flex-col items-center justify-center gap-3">
-                    <div className="h-14 w-14 rounded-xl bg-emerald-100 flex items-center justify-center">
-                      <span className="text-2xl">📊</span>
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-8 flex flex-col items-center justify-center gap-3">
+                      <div className="h-14 w-14 rounded-xl bg-emerald-100 flex items-center justify-center">
+                        <span className="text-2xl">📊</span>
+                      </div>
+                      <p className="text-sm font-medium text-emerald-800">
+                        Excel Spreadsheet
+                      </p>
+                      <p className="text-xs text-emerald-600">
+                        {selectedDoc.title}
+                      </p>
+                      <div className="flex gap-2 mt-1">
+                        <button
+                          onClick={() => handleDownload(selectedDoc)}
+                          className="text-sm text-emerald-700 hover:underline flex items-center gap-1"
+                        >
+                          <Download className="h-3.5 w-3.5" /> Download to view
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-sm font-medium text-emerald-800">
-                      Excel Spreadsheet
-                    </p>
-                    <p className="text-xs text-emerald-600">
-                      {selectedDoc.title}
-                    </p>
-                    <div className="flex gap-2 mt-1">
-                      <button
-                        onClick={() => handleDownload(selectedDoc)}
-                        className="text-sm text-emerald-700 hover:underline flex items-center gap-1"
-                      >
-                        <Download className="h-3.5 w-3.5" /> Download to view
-                      </button>
-                    </div>
-                  </div>
-                )}
+                  )}
 
                 {/* PowerPoint / Presentation placeholder */}
                 {(selectedDoc.mimeType ===
                   "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
                   selectedDoc.mimeType === "application/vnd.ms-powerpoint") && (
-                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-8 flex flex-col items-center justify-center gap-3">
-                    <div className="h-14 w-14 rounded-xl bg-orange-100 flex items-center justify-center">
-                      <span className="text-2xl">📽️</span>
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-8 flex flex-col items-center justify-center gap-3">
+                      <div className="h-14 w-14 rounded-xl bg-orange-100 flex items-center justify-center">
+                        <span className="text-2xl">📽️</span>
+                      </div>
+                      <p className="text-sm font-medium text-orange-800">
+                        PowerPoint Presentation
+                      </p>
+                      <p className="text-xs text-orange-600">
+                        {selectedDoc.title}
+                      </p>
+                      <div className="flex gap-2 mt-1">
+                        <button
+                          onClick={() => handleDownload(selectedDoc)}
+                          className="text-sm text-orange-700 hover:underline flex items-center gap-1"
+                        >
+                          <Download className="h-3.5 w-3.5" /> Download to view
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-sm font-medium text-orange-800">
-                      PowerPoint Presentation
-                    </p>
-                    <p className="text-xs text-orange-600">
-                      {selectedDoc.title}
-                    </p>
-                    <div className="flex gap-2 mt-1">
-                      <button
-                        onClick={() => handleDownload(selectedDoc)}
-                        className="text-sm text-orange-700 hover:underline flex items-center gap-1"
-                      >
-                        <Download className="h-3.5 w-3.5" /> Download to view
-                      </button>
-                    </div>
-                  </div>
-                )}
+                  )}
 
                 {/* Video preview */}
                 {selectedDoc.mimeType?.startsWith("video/") && previewUrl && (
@@ -2133,63 +2551,68 @@ export default function DocumentsPage() {
                 {/* Text / JSON / code preview or inline editor */}
                 {(selectedDoc.mimeType?.startsWith("text/") ||
                   selectedDoc.mimeType === "application/json") && (
-                  <>
-                    {isTextEditing ? (
-                      <div className="flex flex-col gap-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-medium text-slate-500">
-                            Editing — {selectedDoc.title}
-                          </span>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={handleSaveText}
-                              disabled={savingContent}
-                              className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 disabled:opacity-50"
-                            >
-                              {savingContent ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Save className="h-3 w-3" />
-                              )}
-                              {savingContent ? "Saving..." : "Save"}
-                            </button>
-                            <button
-                              onClick={handleCancelTextEdit}
-                              className="flex items-center gap-1 px-3 py-1.5 border border-slate-300 rounded text-xs hover:bg-slate-50"
-                            >
-                              <X className="h-3 w-3" /> Cancel
-                            </button>
+                    <>
+                      {isTextEditing ? (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-slate-500">
+                              Editing — {selectedDoc.title}
+                            </span>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleSaveText}
+                                disabled={savingContent}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded text-xs hover:bg-emerald-700 disabled:opacity-50"
+                              >
+                                {savingContent ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Save className="h-3 w-3" />
+                                )}
+                                {savingContent ? "Saving..." : "Save"}
+                              </button>
+                              <button
+                                onClick={handleCancelTextEdit}
+                                className="flex items-center gap-1 px-3 py-1.5 border border-slate-300 rounded text-xs hover:bg-slate-50"
+                              >
+                                <X className="h-3 w-3" /> Cancel
+                              </button>
+                            </div>
                           </div>
+                          <textarea
+                            value={editedContent}
+                            onChange={(e) => setEditedContent(e.target.value)}
+                            className="w-full h-[450px] p-3 bg-slate-50 border border-slate-300 rounded-lg font-mono text-sm text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            spellCheck={false}
+                          />
                         </div>
-                        <textarea
-                          value={editedContent}
-                          onChange={(e) => setEditedContent(e.target.value)}
-                          className="w-full h-[450px] p-3 bg-slate-50 border border-slate-300 rounded-lg font-mono text-sm text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                          spellCheck={false}
-                        />
-                      </div>
-                    ) : textContent !== null ? (
-                      <div
-                        className="bg-slate-50 border border-slate-200 rounded-lg overflow-auto"
-                        style={{ maxHeight: 500 }}
-                      >
-                        <pre className="p-4 text-sm font-mono text-slate-800 whitespace-pre-wrap break-words">
-                          {textContent}
-                        </pre>
-                      </div>
-                    ) : (
-                      <div className="bg-slate-100 rounded-lg p-8 flex items-center justify-center text-slate-400 text-sm">
-                        Loading preview...
-                      </div>
-                    )}
-                  </>
-                )}
+                      ) : textContent !== null ? (
+                        <div
+                          className="bg-slate-50 border border-slate-200 rounded-lg overflow-auto"
+                          style={{ maxHeight: 500 }}
+                        >
+                          {piiMasked && (
+                            <div className="sticky top-0 z-10 bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-800 flex items-center gap-2">
+                              🛡️ <span className="font-semibold">PII Shield active</span> — sensitive fields have been automatically masked based on your role. Request elevated access to view the unmasked document.
+                            </div>
+                          )}
+                          <pre className="p-4 text-sm font-mono text-slate-800 whitespace-pre-wrap break-words">
+                            {textContent}
+                          </pre>
+                        </div>
+                      ) : (
+                        <div className="bg-slate-100 rounded-lg p-8 flex items-center justify-center text-slate-400 text-sm">
+                          Loading preview...
+                        </div>
+                      )}
+                    </>
+                  )}
 
                 {/* Binary blob loading state */}
                 {(selectedDoc.mimeType?.startsWith("image/") ||
                   selectedDoc.mimeType === "application/pdf" ||
                   selectedDoc.mimeType ===
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
                   selectedDoc.mimeType?.startsWith("video/") ||
                   selectedDoc.mimeType?.startsWith("audio/")) &&
                   !previewUrl && (
@@ -2209,12 +2632,12 @@ export default function DocumentsPage() {
                     m.startsWith("video/") ||
                     m.startsWith("audio/") ||
                     m ===
-                      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
                     m ===
-                      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
                     m === "application/vnd.ms-excel" ||
                     m ===
-                      "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
                     m === "application/vnd.ms-powerpoint" ||
                     m === "application/msword";
                   if (previewable) return null;
@@ -2287,75 +2710,435 @@ export default function DocumentsPage() {
                 {(selectedDoc.m365Link ||
                   selectedDoc.docusignEnvelopeId ||
                   selectedDoc.sapDocumentNumber) && (
-                  <div className="border border-slate-200 rounded-lg p-3 space-y-2">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      Integrations
-                    </p>
-                    {selectedDoc.m365Link && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-semibold">
-                            M365
-                          </span>
-                          <span
-                            className="text-xs text-slate-600 truncate max-w-[200px]"
-                            title={selectedDoc.m365Link}
+                    <div className="border border-slate-200 rounded-lg p-3 space-y-2">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        Integrations
+                      </p>
+                      {selectedDoc.m365Link && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-semibold">
+                              M365
+                            </span>
+                            <span
+                              className="text-xs text-slate-600 truncate max-w-[200px]"
+                              title={selectedDoc.m365Link}
+                            >
+                              SharePoint Linked
+                            </span>
+                          </div>
+                          <a
+                            href={selectedDoc.m365Link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:underline flex items-center gap-1"
                           >
-                            SharePoint Linked
-                          </span>
+                            <ExternalLink className="h-3 w-3" /> Open in
+                            SharePoint
+                          </a>
                         </div>
-                        <a
-                          href={selectedDoc.m365Link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-                        >
-                          <ExternalLink className="h-3 w-3" /> Open in
-                          SharePoint
-                        </a>
-                      </div>
-                    )}
-                    {selectedDoc.docusignEnvelopeId && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[10px] font-semibold">
-                            DocuSign
-                          </span>
-                          <span
-                            className="text-xs text-slate-600 truncate max-w-[200px]"
-                            title={selectedDoc.docusignEnvelopeId}
+                      )}
+                      {selectedDoc.docusignEnvelopeId && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-[10px] font-semibold">
+                              DocuSign
+                            </span>
+                            <span
+                              className="text-xs text-slate-600 truncate max-w-[200px]"
+                              title={selectedDoc.docusignEnvelopeId}
+                            >
+                              {selectedDoc.docusignEnvelopeId}
+                            </span>
+                          </div>
+                          <a
+                            href={`https://app.docusign.com/documents/details/${selectedDoc.docusignEnvelopeId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-yellow-700 hover:underline flex items-center gap-1"
                           >
-                            {selectedDoc.docusignEnvelopeId}
+                            <ExternalLink className="h-3 w-3" /> View Envelope
+                          </a>
+                        </div>
+                      )}
+                      {selectedDoc.sapDocumentNumber && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-semibold">
+                              SAP
+                            </span>
+                            <span className="text-xs text-slate-600">
+                              {selectedDoc.sapDocumentNumber}
+                            </span>
+                          </div>
+                          <span className="text-xs text-orange-600 flex items-center gap-1">
+                            <FileText className="h-3 w-3" /> Linked
                           </span>
                         </div>
-                        <a
-                          href={`https://app.docusign.com/documents/details/${selectedDoc.docusignEnvelopeId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-yellow-700 hover:underline flex items-center gap-1"
-                        >
-                          <ExternalLink className="h-3 w-3" /> View Envelope
-                        </a>
-                      </div>
-                    )}
-                    {selectedDoc.sapDocumentNumber && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-semibold">
-                            SAP
-                          </span>
-                          <span className="text-xs text-slate-600">
-                            {selectedDoc.sapDocumentNumber}
-                          </span>
-                        </div>
-                        <span className="text-xs text-orange-600 flex items-center gap-1">
-                          <FileText className="h-3 w-3" /> Linked
+                      )}
+                    </div>
+                  )}
+              </div>
+
+              {/* AI-Extracted Entities — Intelligent Intake */}
+              {(selectedDoc as any).extractedEntities &&
+                Object.keys((selectedDoc as any).extractedEntities).length > 0 && (
+                  <div className="px-4 pb-3">
+                    <div className="bg-gradient-to-br from-violet-50 to-sky-50 border border-violet-200 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Bot className="h-4 w-4 text-violet-600" />
+                        <span className="text-xs font-semibold text-violet-800 uppercase tracking-wide">
+                          Extracted Information
                         </span>
+                      </div>
+                      {(() => {
+                        const e = (selectedDoc as any).extractedEntities as Record<string, any>;
+                        const rows: JSX.Element[] = [];
+                        if (e.primaryVendor) {
+                          rows.push(
+                            <div key="v" className="flex items-center justify-between text-xs">
+                              <span className="text-slate-500">Vendor</span>
+                              <span className="font-medium text-slate-800">{e.primaryVendor}</span>
+                            </div>,
+                          );
+                        }
+                        if (e.totalAmount != null) {
+                          rows.push(
+                            <div key="a" className="flex items-center justify-between text-xs">
+                              <span className="text-slate-500">Amount</span>
+                              <span className="font-mono font-semibold text-emerald-700">
+                                {e.currency || "USD"} {Number(e.totalAmount).toLocaleString()}
+                              </span>
+                            </div>,
+                          );
+                        }
+                        if (e.primaryInvoiceNumber) {
+                          rows.push(
+                            <div key="i" className="flex items-center justify-between text-xs">
+                              <span className="text-slate-500">Invoice #</span>
+                              <span className="font-mono text-slate-800">{e.primaryInvoiceNumber}</span>
+                            </div>,
+                          );
+                        }
+                        if (e.primaryDate) {
+                          rows.push(
+                            <div key="d" className="flex items-center justify-between text-xs">
+                              <span className="text-slate-500">Date</span>
+                              <span className="font-mono text-slate-800">{e.primaryDate}</span>
+                            </div>,
+                          );
+                        }
+                        if (Array.isArray(e.emails) && e.emails.length > 0) {
+                          rows.push(
+                            <div key="em" className="flex items-start justify-between text-xs gap-2">
+                              <span className="text-slate-500">Emails</span>
+                              <span className="font-mono text-slate-800 text-right break-all">
+                                {e.emails.slice(0, 2).join(", ")}
+                                {e.emails.length > 2 && ` +${e.emails.length - 2}`}
+                              </span>
+                            </div>,
+                          );
+                        }
+                        return rows.length > 0 ? rows : (
+                          <span className="text-[11px] text-slate-400 italic">
+                            No structured entities found in content.
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+              {/* Active viewers — Modern Workspace presence avatars */}
+              {viewers.length > 0 && (
+                <div className="px-4 pb-3">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="h-4 w-4 text-emerald-600" />
+                      <span className="text-xs font-semibold text-emerald-800 uppercase tracking-wide">
+                        Currently Viewing ({viewers.length})
+                      </span>
+                    </div>
+                    <div className="flex items-center -space-x-2">
+                      {viewers.slice(0, 6).map((v) => {
+                        const initials = (v.displayName || v.username || "?")
+                          .split(/\s+/)
+                          .map((p) => p[0])
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .join("")
+                          .toUpperCase();
+                        // deterministic colour based on userId
+                        const hue = (v.userId || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+                        const isMe = v.userId === currentUser?.id;
+                        return (
+                          <div
+                            key={v.userId}
+                            title={`${v.displayName || v.username}${isMe ? " (you)" : ""}`}
+                            className={`relative h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white ring-2 ${isMe ? "ring-emerald-500" : "ring-white"}`}
+                            style={{ backgroundColor: `hsl(${hue},60%,45%)` }}
+                          >
+                            {initials}
+                            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-white" />
+                          </div>
+                        );
+                      })}
+                      {viewers.length > 6 && (
+                        <div className="h-8 w-8 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold flex items-center justify-center ring-2 ring-white">
+                          +{viewers.length - 6}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Related Documents — cross-document relationships */}
+              <div className="px-4 pb-3">
+                <div className="bg-sky-50 border border-sky-200 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <GitBranch className="h-4 w-4 text-sky-600" />
+                      <span className="text-xs font-semibold text-sky-800 uppercase tracking-wide">
+                        Related Documents ({docLinks.length})
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setShowLinkPicker(v => !v)}
+                      className="text-[11px] text-sky-700 hover:text-sky-900 font-semibold"
+                    >
+                      {showLinkPicker ? "Cancel" : "+ Link"}
+                    </button>
+                  </div>
+
+                  {showLinkPicker && (
+                    <div className="mb-2 bg-white border border-sky-200 rounded p-2 space-y-2">
+                      <div className="flex gap-1">
+                        <select
+                          value={linkPickerType}
+                          onChange={(e) => setLinkPickerType(e.target.value)}
+                          className="text-[11px] border border-slate-200 rounded px-1 py-0.5"
+                        >
+                          <option value="RELATED">Related</option>
+                          <option value="SUPERSEDES">Supersedes</option>
+                          <option value="AMENDMENT">Amendment</option>
+                          <option value="ATTACHMENT">Attachment</option>
+                          <option value="REVISION_OF">Revision of</option>
+                        </select>
+                        <input
+                          type="text"
+                          placeholder="Search documents…"
+                          value={linkPickerQuery}
+                          onChange={(e) => handleSearchLinkCandidates(e.target.value)}
+                          className="flex-1 text-[11px] border border-slate-200 rounded px-2 py-0.5"
+                        />
+                      </div>
+                      {linkPickerResults.length > 0 && (
+                        <ul className="max-h-32 overflow-y-auto space-y-0.5">
+                          {linkPickerResults.map((r) => (
+                            <li key={r.id}>
+                              <button
+                                onClick={() => handleCreateLink(r.id)}
+                                className="w-full text-left text-[11px] px-2 py-1 rounded hover:bg-sky-50 truncate"
+                              >
+                                {r.title}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                  {docLinks.length === 0 ? (
+                    <p className="text-[11px] text-slate-400 italic">
+                      No related documents linked.
+                    </p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {docLinks.map((l: any) => (
+                        <li
+                          key={l.id}
+                          className="flex items-center justify-between bg-white border border-sky-100 rounded px-2 py-1 text-[11px]"
+                        >
+                          <button
+                            onClick={() => {
+                              const target = documents.find(d => d.id === l.relatedDocumentId);
+                              if (target) setSelectedDoc(target);
+                              else documentApi.get(l.relatedDocumentId).then(res => {
+                                const d = res.data?.data ?? res.data;
+                                if (d) setSelectedDoc(d);
+                              }).catch(() => {});
+                            }}
+                            className="flex-1 text-left truncate hover:text-sky-700"
+                          >
+                            <span className="inline-block px-1 py-0.5 bg-sky-100 text-sky-700 rounded text-[9px] font-semibold mr-1">
+                              {l.linkType}
+                            </span>
+                            <span
+                              className={
+                                l.direction === "INCOMING"
+                                  ? "text-slate-500 italic"
+                                  : "text-slate-800"
+                              }
+                            >
+                              {l.direction === "INCOMING" ? "← " : "→ "}
+                              {l.relatedDocumentTitle}
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLink(l.id)}
+                            className="ml-1 text-slate-400 hover:text-red-600"
+                            title="Remove link"
+                          >
+                            ×
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              {/* Email Info Section */}
+              {selectedDoc.metadata && (selectedDoc.metadata as Record<string, unknown>)?.source === "email" && (
+                <div className="px-4 pb-3">
+                  <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <MessageSquare className="h-4 w-4 text-indigo-600" />
+                      <span className="text-xs font-semibold text-indigo-800 uppercase tracking-wide">
+                        Email Details
+                      </span>
+                      {selectedDoc.parentDocumentId && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-semibold">
+                          Attachment
+                        </span>
+                      )}
+                      {!selectedDoc.parentDocumentId && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-semibold">
+                          Parent Email
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Email metadata fields */}
+                    {(() => {
+                      const meta = selectedDoc.metadata as Record<string, unknown>;
+                      return (
+                        <div className="space-y-1.5 text-xs">
+                          {meta.emailFrom && (
+                            <div className="flex gap-2">
+                              <span className="text-indigo-600 font-medium w-16 shrink-0">From:</span>
+                              <span className="text-slate-700 truncate">{String(meta.emailFrom)}</span>
+                            </div>
+                          )}
+                          {meta.emailTo && (
+                            <div className="flex gap-2">
+                              <span className="text-indigo-600 font-medium w-16 shrink-0">To:</span>
+                              <span className="text-slate-700 truncate">{String(meta.emailTo)}</span>
+                            </div>
+                          )}
+                          {meta.emailCc && (
+                            <div className="flex gap-2">
+                              <span className="text-indigo-600 font-medium w-16 shrink-0">CC:</span>
+                              <span className="text-slate-700 truncate">{String(meta.emailCc)}</span>
+                            </div>
+                          )}
+                          {meta.emailSubject && (
+                            <div className="flex gap-2">
+                              <span className="text-indigo-600 font-medium w-16 shrink-0">Subject:</span>
+                              <span className="text-slate-700 truncate">{String(meta.emailSubject)}</span>
+                            </div>
+                          )}
+                          {meta.emailDate && (
+                            <div className="flex gap-2">
+                              <span className="text-indigo-600 font-medium w-16 shrink-0">Date:</span>
+                              <span className="text-slate-700">{formatDate(String(meta.emailDate))}</span>
+                            </div>
+                          )}
+                          {meta.emailRule && (
+                            <div className="flex gap-2">
+                              <span className="text-indigo-600 font-medium w-16 shrink-0">Rule:</span>
+                              <span className="text-slate-700">{String(meta.emailRule)}</span>
+                            </div>
+                          )}
+                          {meta.emailConfig && (
+                            <div className="flex gap-2">
+                              <span className="text-indigo-600 font-medium w-16 shrink-0">Config:</span>
+                              <span className="text-slate-700">{String(meta.emailConfig)}</span>
+                            </div>
+                          )}
+                          {meta.ingestedAt && (
+                            <div className="flex gap-2">
+                              <span className="text-indigo-600 font-medium w-16 shrink-0">Ingested:</span>
+                              <span className="text-slate-700">{formatDate(String(meta.ingestedAt))}</span>
+                            </div>
+                          )}
+                          {typeof meta.emailAttachmentCount === "number" && meta.emailAttachmentCount > 0 && (
+                            <div className="flex gap-2">
+                              <span className="text-indigo-600 font-medium w-16 shrink-0">Files:</span>
+                              <span className="text-slate-700">{String(meta.emailAttachmentCount)} attachment(s)</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Linked attachments (children of parent email) */}
+                    {!selectedDoc.parentDocumentId && emailChildren.length > 0 && (
+                      <div className="mt-3 pt-2 border-t border-indigo-200">
+                        <p className="text-[10px] font-semibold text-indigo-700 uppercase tracking-wide mb-1.5">
+                          Attachments ({emailChildren.length})
+                        </p>
+                        <div className="space-y-1">
+                          {emailChildren.map((child) => (
+                            <button
+                              key={child.id}
+                              onClick={() => setSelectedDoc(child)}
+                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded bg-white hover:bg-indigo-100 transition-colors text-left border border-indigo-100"
+                            >
+                              <FileText className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs text-slate-800 truncate font-medium">
+                                  {child.title?.replace("[Attachment] ", "")}
+                                </p>
+                                <p className="text-[10px] text-slate-500">
+                                  {child.fileExtension?.toUpperCase()} &middot; {formatBytes(child.fileSizeBytes || 0)}
+                                </p>
+                              </div>
+                              <Download className="h-3 w-3 text-indigo-400 shrink-0" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Link back to parent email (if this is an attachment) */}
+                    {selectedDoc.parentDocumentId && emailParent && (
+                      <div className="mt-3 pt-2 border-t border-indigo-200">
+                        <p className="text-[10px] font-semibold text-indigo-700 uppercase tracking-wide mb-1.5">
+                          Parent Email
+                        </p>
+                        <button
+                          onClick={() => setSelectedDoc(emailParent)}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded bg-white hover:bg-indigo-100 transition-colors text-left border border-indigo-100"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-slate-800 truncate font-medium">
+                              {emailParent.title?.replace("[Email] ", "")}
+                            </p>
+                            <p className="text-[10px] text-slate-500">
+                              From: {(emailParent.metadata as Record<string, unknown>)?.emailFrom as string || "unknown"}
+                            </p>
+                          </div>
+                          <ExternalLink className="h-3 w-3 text-indigo-400 shrink-0" />
+                        </button>
                       </div>
                     )}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Signatures */}
               <div className="px-4 pb-2">
@@ -2383,25 +3166,27 @@ export default function DocumentsPage() {
                       </div>
                     </div>
                     {wordUrl ? (
-                      <a
-                        href={wordUrl}
+                      <button
+                        onClick={() => launchOfficeProtocol(wordUrl)}
                         className="block mt-2 w-full text-center px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
-                        onClick={() =>
-                          console.log("[Edit] User clicked Open in Office link")
-                        }
                       >
-                        📝 Click Here to Open in{" "}
+                        📝 Open in{" "}
                         {OFFICE_MIME_MAP[selectedDoc.mimeType || ""]?.label ||
                           "Office"}
-                      </a>
+                      </button>
                     ) : (
                       <p className="text-xs text-emerald-600 mt-1">
                         Generating link...
                       </p>
                     )}
+                    <button
+                      onClick={() => openInWps(selectedDoc.id)}
+                      className="block mt-1 w-full text-center px-4 py-2.5 bg-cyan-600 text-white rounded-lg text-sm font-semibold hover:bg-cyan-700 transition-colors"
+                    >
+                      📄 Open in WPS Office
+                    </button>
                     <p className="text-xs text-emerald-600 mt-1">
-                      Lock held — saves in Word auto-upload to server. Click
-                      Cancel Edit when done.
+                      Lock held — edit locally, then Check In when done.
                     </p>
                     <div className="flex gap-2 mt-2">
                       <button
@@ -2410,6 +3195,13 @@ export default function DocumentsPage() {
                       >
                         <UploadCloud className="h-3.5 w-3.5" /> Check In Edited
                         File
+                      </button>
+                      <button
+                        onClick={handleDoneEditing}
+                        title="I finished editing in Word/WebDAV — my saves are already captured. Release the lock."
+                        className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700 font-semibold"
+                      >
+                        ✓ Done
                       </button>
                       <button
                         onClick={handleCancelEdit}
@@ -2565,13 +3357,47 @@ export default function DocumentsPage() {
                           <Lock className="h-4 w-4" /> Check Out
                         </button>
                       ) : selectedDoc.checkedOutBy === currentUser?.id ? (
-                        <button
-                          onClick={() => handleCancelCheckout(selectedDoc)}
-                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-green-300 text-green-700 rounded-lg text-sm hover:bg-green-50"
-                        >
-                          <Unlock className="h-4 w-4" /> Cancel Checkout
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleCheckinForCheckout(selectedDoc)}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm hover:bg-emerald-700"
+                          >
+                            <UploadCloud className="h-4 w-4" /> Check In
+                          </button>
+                          <button
+                            onClick={() => handleCancelCheckout(selectedDoc)}
+                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 border border-green-300 text-green-700 rounded-lg text-sm hover:bg-green-50"
+                          >
+                            <Unlock className="h-4 w-4" /> Cancel Checkout
+                          </button>
+                        </>
                       ) : null}
+                    </div>
+                    {/* Legal Hold one-click toggle */}
+                    <div className="mt-2">
+                      <button
+                        onClick={() => handleToggleLegalHold(selectedDoc)}
+                        className={
+                          selectedDoc.legalHold
+                            ? "w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
+                            : "w-full flex items-center justify-center gap-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg text-sm hover:bg-red-50"
+                        }
+                        title={
+                          selectedDoc.legalHold
+                            ? `Under legal hold: ${selectedDoc.legalHoldReason || "(no reason recorded)"}`
+                            : "Freeze this document from deletion / retention disposal"
+                        }
+                      >
+                        <Shield className="h-4 w-4" />
+                        {selectedDoc.legalHold
+                          ? "Release Legal Hold"
+                          : "Place on Legal Hold"}
+                      </button>
+                      {selectedDoc.legalHold && selectedDoc.legalHoldReason && (
+                        <p className="mt-1 text-[11px] text-red-700 italic text-center">
+                          Reason: {selectedDoc.legalHoldReason}
+                        </p>
+                      )}
                     </div>
                   </>
                 )}
@@ -2927,17 +3753,15 @@ function DocumentWorkflowPanel({
                 {hasActiveWorkflow ? "Workflow Progress" : "Workflows"} ({instances.length})
               </h4>
               {transitionMsg && (
-                <div className={`rounded-lg p-2 flex items-center gap-2 mb-3 ${
-                  transitionMsg.type === "success"
+                <div className={`rounded-lg p-2 flex items-center gap-2 mb-3 ${transitionMsg.type === "success"
                     ? "bg-green-50 border border-green-200"
                     : "bg-red-50 border border-red-200"
-                }`}>
+                  }`}>
                   {transitionMsg.type === "success"
                     ? <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
                     : <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />}
-                  <p className={`text-xs font-medium ${
-                    transitionMsg.type === "success" ? "text-green-700" : "text-red-700"
-                  }`}>{transitionMsg.text}</p>
+                  <p className={`text-xs font-medium ${transitionMsg.type === "success" ? "text-green-700" : "text-red-700"
+                    }`}>{transitionMsg.text}</p>
                 </div>
               )}
               {instances.length === 0 ? (
@@ -2996,9 +3820,8 @@ function DocumentWorkflowPanel({
                                         }
                                       }}
                                       disabled={transitioning !== null}
-                                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5 ${
-                                        actionStyle[t.action.toLowerCase()] || "bg-primary-600 hover:bg-primary-700 text-white"
-                                      }`}
+                                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5 ${actionStyle[t.action.toLowerCase()] || "bg-primary-600 hover:bg-primary-700 text-white"
+                                        }`}
                                     >
                                       {transitioning === `${inst.id}-${t.action}` ? (
                                         <Loader2 className="h-3 w-3 animate-spin" />
@@ -3225,15 +4048,29 @@ function DocumentAiPanel({
   document: Document;
   onClose: () => void;
 }) {
+  const [tab, setTab] = useState<"ask" | "saved">("ask");
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [question, setQuestion] = useState("");
-  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; text: string }[]>([]);
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; text: string; pairId?: string; q?: string; saved?: boolean }[]>([]);
   const [askLoading, setAskLoading] = useState(false);
   const [docContent, setDocContent] = useState<string | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedConvos, setSavedConvos] = useState<any[]>([]);
+  const [savedLoading, setSavedLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const loadSaved = async () => {
+    setSavedLoading(true);
+    try {
+      const r = await documentConversationApi.listForDocument(doc.id);
+      setSavedConvos(r.data?.data ?? r.data ?? []);
+    } catch { /* silent */ }
+    setSavedLoading(false);
+  };
+
+  useEffect(() => { if (tab === "saved") loadSaved(); /* eslint-disable-next-line */ }, [tab, doc.id]);
 
   // Load document content on mount
   useEffect(() => {
@@ -3295,18 +4132,33 @@ function DocumentAiPanel({
   const handleAsk = async () => {
     if (!docContent || !question.trim()) return;
     const q = question.trim();
+    const pairId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     setQuestion("");
-    setChatHistory((prev) => [...prev, { role: "user", text: q }]);
+    setChatHistory((prev) => [...prev, { role: "user", text: q, pairId, q }]);
     setAskLoading(true);
     setError(null);
     try {
       const res = await aiApi.ask(docContent, doc.title || doc.filename, q);
       const data = res.data?.data ?? res.data;
-      setChatHistory((prev) => [...prev, { role: "ai", text: data?.answer || "No answer." }]);
+      setChatHistory((prev) => [...prev, { role: "ai", text: data?.answer || "No answer.", pairId, q }]);
     } catch (err: any) {
-      setChatHistory((prev) => [...prev, { role: "ai", text: "Error: " + (err?.response?.data?.message || "AI unavailable") }]);
+      setChatHistory((prev) => [...prev, { role: "ai", text: "Error: " + (err?.response?.data?.message || "AI unavailable"), pairId, q }]);
     }
     setAskLoading(false);
+  };
+
+  const saveQA = async (pairId: string, q: string, answer: string) => {
+    try {
+      await documentConversationApi.save(doc.id, {
+        versionId: null,
+        title: q.length > 80 ? q.slice(0, 77) + "…" : q,
+        question: q,
+        answer,
+      });
+      setChatHistory((prev) => prev.map((m) => (m.pairId === pairId ? { ...m, saved: true } : m)));
+    } catch (err: any) {
+      setError(err?.response?.data?.message || "Could not save");
+    }
   };
 
   return (
@@ -3332,12 +4184,83 @@ function DocumentAiPanel({
             {docContent && <span className="text-[10px] text-green-500 ml-auto">Content loaded</span>}
           </div>
 
+          {/* Tabs */}
+          <div className="flex gap-1 bg-slate-100 rounded-lg p-1 text-xs">
+            <button
+              onClick={() => setTab("ask")}
+              className={`flex-1 px-3 py-1.5 rounded-md font-medium transition-colors ${
+                tab === "ask" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Ask
+            </button>
+            <button
+              onClick={() => setTab("saved")}
+              className={`flex-1 px-3 py-1.5 rounded-md font-medium transition-colors ${
+                tab === "saved" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Conversations {savedConvos.length > 0 && <span className="ml-1 text-slate-400">({savedConvos.length})</span>}
+            </button>
+          </div>
+
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-600">
               {error}
             </div>
           )}
 
+          {tab === "saved" ? (
+            <div className="border border-slate-200 rounded-lg">
+              <div className="px-3 py-2 bg-slate-50 rounded-t-lg flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-700">Saved questions on this document</span>
+                <button
+                  onClick={() => setTab("ask")}
+                  className="px-2 py-1 bg-indigo-600 text-white text-[11px] rounded-md hover:bg-indigo-700 inline-flex items-center gap-1"
+                >
+                  <MessageSquare className="h-3 w-3" /> Ask new
+                </button>
+              </div>
+              {savedLoading ? (
+                <div className="px-3 py-6 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                </div>
+              ) : savedConvos.length === 0 ? (
+                <div className="px-3 py-6 text-center text-xs text-slate-400">
+                  No saved conversations yet. Ask a question and save the answer so others don&apos;t need to ask the same question again.
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
+                  {savedConvos.map((c: any) => (
+                    <div key={c.id} className="px-3 py-3 text-xs">
+                      <div className="font-semibold text-slate-800">{c.title || c.question}</div>
+                      <div className="text-slate-500 mt-1 italic">Q: {c.question}</div>
+                      <div className="text-slate-700 mt-1 whitespace-pre-wrap">A: {c.answer}</div>
+                      <div className="text-[10px] text-slate-400 mt-2 flex items-center gap-2">
+                        <span>{c.asked_by_name || "—"}</span>
+                        <span>·</span>
+                        <span>{new Date(c.created_at).toLocaleString()}</span>
+                        {c.version_number != null && (
+                          <span className="ml-auto text-slate-500">v{c.version_number}</span>
+                        )}
+                        <button
+                          onClick={async () => {
+                            if (!confirm("Remove this saved Q&A?")) return;
+                            await documentConversationApi.delete(c.id);
+                            loadSaved();
+                          }}
+                          className="ml-auto text-red-500 hover:underline"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+          <>
           {/* Summary section */}
           <div className="border border-cyan-200 rounded-lg">
             <div className="flex items-center justify-between px-3 py-2 bg-cyan-50 rounded-t-lg">
@@ -3384,12 +4307,27 @@ function DocumentAiPanel({
               )}
               {chatHistory.map((msg, i) => (
                 <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[85%] rounded-lg px-3 py-2 text-xs leading-relaxed ${
-                    msg.role === "user"
+                  <div className={`max-w-[85%] rounded-lg px-3 py-2 text-xs leading-relaxed ${msg.role === "user"
                       ? "bg-indigo-600 text-white"
                       : "bg-slate-100 text-slate-700"
-                  }`}>
+                    }`}>
                     {msg.text}
+                    {msg.role === "ai" && msg.pairId && msg.q && (
+                      <div className="mt-2 pt-2 border-t border-slate-200">
+                        {msg.saved ? (
+                          <span className="text-[10px] text-green-600 inline-flex items-center gap-1">
+                            <Check className="h-3 w-3" /> Saved to document
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => saveQA(msg.pairId!, msg.q!, msg.text)}
+                            className="text-[10px] text-indigo-600 hover:underline inline-flex items-center gap-1"
+                          >
+                            <Bookmark className="h-3 w-3" /> Save Q&amp;A
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -3422,6 +4360,8 @@ function DocumentAiPanel({
               </button>
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>

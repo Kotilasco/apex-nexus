@@ -42,6 +42,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             UUID userId = tokenProvider.getUserIdFromToken(token);
             String username = tokenProvider.getUsernameFromToken(token);
             List<String> roles = tokenProvider.getRolesFromToken(token);
+            java.util.Map<UUID, List<String>> projectPerms = tokenProvider.getProjectPermsFromToken(token);
 
             List<SimpleGrantedAuthority> authorities = roles.stream()
                     .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
@@ -56,6 +57,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // Set user context for RLS
             request.setAttribute("currentUserId", userId.toString());
             request.setAttribute("currentUsername", username);
+            request.setAttribute(SecurityContextUtil.ATTR_PROJECT_PERMS, projectPerms);
         }
 
         filterChain.doFilter(request, response);

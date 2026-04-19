@@ -1,0 +1,16 @@
+INVOICE
+
+From: Acme Corporation
+Bill To: Apex Nexus Ltd
+Invoice #: INV-00842
+Date: 2025-03-15
+
+Description                        Amount
+Consulting services                $2,450.00
+Software licenses                  $1,200.00
+Support contract                   $750.00
+
+Total: USD 4,400.00
+Tax ID: VAT-GB123456789
+Contact: accounts@acme.com
+Phone: +44 207 123 4567

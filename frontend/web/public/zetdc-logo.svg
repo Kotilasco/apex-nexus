@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="#1B5E20" stroke="#FDD835" stroke-width="4" />
+  <!-- Inner ring -->
+  <circle cx="100" cy="100" r="78" fill="none" stroke="#FDD835" stroke-width="2" opacity="0.5" />
+  <!-- Lightning bolt -->
+  <path d="M115 45 L85 100 L105 100 L80 155 L130 90 L108 90 Z" fill="#FDD835" stroke="#FFF9C4" stroke-width="1" />
+  <!-- Tower/pylon shape -->
+  <path d="M60 170 L75 120 L80 120 L72 170 Z" fill="#A5D6A7" opacity="0.7" />
+  <path d="M140 170 L125 120 L120 120 L128 170 Z" fill="#A5D6A7" opacity="0.7" />
+  <line x1="75" y1="130" x2="125" y2="130" stroke="#A5D6A7" stroke-width="2" opacity="0.7" />
+  <line x1="77" y1="140" x2="123" y2="140" stroke="#A5D6A7" stroke-width="2" opacity="0.7" />
+  <!-- ZETDC text -->
+  <text x="100" y="190" text-anchor="middle" font-family="Arial, sans-serif" font-weight="bold" font-size="18" fill="#FDD835" letter-spacing="4">ZETDC</text>
+</svg>

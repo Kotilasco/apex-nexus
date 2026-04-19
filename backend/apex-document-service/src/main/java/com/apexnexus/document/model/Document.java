@@ -133,12 +133,22 @@ public class Document {
     @Column(name = "sap_document_number", length = 50)
     private String sapDocumentNumber;
 
+    @Column(name = "extracted_entities", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
+    private Map<String, Object> extractedEntities;
+
     @Column(name = "ai_generated")
     @Builder.Default
     private Boolean aiGenerated = false;
 
     @Column(name = "ai_confidence", precision = 5, scale = 4)
     private BigDecimal aiConfidence;
+
+    @Column(name = "parent_document_id")
+    private UUID parentDocumentId;
+
+    @Column(name = "email_message_id", length = 500)
+    private String emailMessageId;
 
     @Column(name = "tags", columnDefinition = "text[]")
     @JdbcTypeCode(SqlTypes.ARRAY)

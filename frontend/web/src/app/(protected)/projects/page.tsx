@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { projectApi, authApi, documentApi } from '@/lib/api';
+
+interface Role { id: string; name: string; }
 import { useAuthStore } from '@/lib/auth-store';
 import { useProjectStore } from '@/lib/project-store';
 import type { Project, ProjectMember, User, Document } from '@/lib/types';
@@ -32,8 +34,9 @@ export default function ProjectsPage() {
   // Add member
   const [showAddMember, setShowAddMember] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
-  const [addMemberForm, setAddMemberForm] = useState({ userId: '', roleId: 'member', permissions: ['READ', 'WRITE'] });
+  const [addMemberForm, setAddMemberForm] = useState({ userId: '', roleId: '', permissions: ['READ', 'WRITE'] });
   const [addMemberLoading, setAddMemberLoading] = useState(false);
+  const [roles, setRoles] = useState<Role[]>([]);
 
   // Documents assignment
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -79,9 +82,19 @@ export default function ProjectsPage() {
   const openAddMember = async () => {
     setShowAddMember(true);
     try {
-      const res = await authApi.getUsers(0, 100);
-      const data = res.data?.data ?? res.data;
+      const [usersRes, rolesRes] = await Promise.all([
+        authApi.getUsers(0, 100),
+        authApi.getRoles(),
+      ]);
+      const data = usersRes.data?.data ?? usersRes.data;
       setUsers(data?.content ?? data ?? []);
+      const rolesData = rolesRes.data?.data ?? rolesRes.data ?? [];
+      setRoles(Array.isArray(rolesData) ? rolesData : rolesData?.content ?? []);
+      // Set default role to VIEWER if available
+      if (rolesData.length > 0 && !addMemberForm.roleId) {
+        const viewerRole = rolesData.find((r: Role) => r.name === 'VIEWER') || rolesData[0];
+        setAddMemberForm(f => ({ ...f, roleId: viewerRole.id }));
+      }
     } catch { /* ignore */ }
   };
 
@@ -91,7 +104,7 @@ export default function ProjectsPage() {
     try {
       await projectApi.addMember(expanded, addMemberForm);
       setShowAddMember(false);
-      setAddMemberForm({ userId: '', roleId: 'member', permissions: ['READ', 'WRITE'] });
+      setAddMemberForm({ userId: '', roleId: '', permissions: ['READ', 'WRITE'] });
       // Reload members
       const res = await projectApi.getMembers(expanded);
       setMembers(res.data?.data ?? res.data ?? []);
@@ -324,10 +337,10 @@ export default function ProjectsPage() {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
                 <select value={addMemberForm.roleId} onChange={e => setAddMemberForm(f => ({ ...f, roleId: e.target.value }))}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
-                  <option value="viewer">Viewer</option>
-                  <option value="member">Member</option>
-                  <option value="editor">Editor</option>
-                  <option value="admin">Admin</option>
+                  <option value="">Select a role...</option>
+                  {roles.map(r => (
+                    <option key={r.id} value={r.id}>{r.name.replace(/_/g, ' ')}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -353,7 +366,7 @@ export default function ProjectsPage() {
             </div>
             <div className="flex items-center justify-end gap-3 p-5 border-t border-slate-200">
               <button onClick={() => setShowAddMember(false)} className="px-4 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50">Cancel</button>
-              <button onClick={handleAddMember} disabled={addMemberLoading || !addMemberForm.userId}
+              <button onClick={handleAddMember} disabled={addMemberLoading || !addMemberForm.userId || !addMemberForm.roleId}
                 className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2">
                 {addMemberLoading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <UserPlus className="h-4 w-4" />}
                 Add Member

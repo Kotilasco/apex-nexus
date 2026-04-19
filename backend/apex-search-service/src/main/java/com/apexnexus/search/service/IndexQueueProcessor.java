@@ -29,6 +29,7 @@ public class IndexQueueProcessor {
     private final SearchService searchService;
     private final ContentExtractorService contentExtractor;
     private final ClassificationService classificationService;
+    private final EntityExtractionService entityExtractor;
     private final GdprScannerService gdprScannerService;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
@@ -197,6 +198,34 @@ public class IndexQueueProcessor {
                                 result.getText(), docIdForContent);
                     } catch (Exception ex) {
                         log.warn("Failed to save extracted content for doc {}: {}", docIdForContent, ex.getMessage());
+                    }
+                }
+
+                // Entity extraction (amounts, dates, vendors, invoice numbers) for smart search
+                String docIdForEntities = (String) document.get("documentId");
+                if (docIdForEntities != null) {
+                    try {
+                        Map<String, Object> entities = entityExtractor.extract(result.getText());
+                        if (entities != null && !entities.isEmpty()) {
+                            document.put("extractedEntities", entities);
+                            // Expose key scalars at the top level so they are indexable/queryable
+                            if (entities.containsKey("totalAmount"))
+                                document.put("totalAmount", entities.get("totalAmount"));
+                            if (entities.containsKey("currency"))
+                                document.put("currency", entities.get("currency"));
+                            if (entities.containsKey("primaryVendor"))
+                                document.put("primaryVendor", entities.get("primaryVendor"));
+                            if (entities.containsKey("primaryInvoiceNumber"))
+                                document.put("primaryInvoiceNumber", entities.get("primaryInvoiceNumber"));
+
+                            String entitiesJson = objectMapper.writeValueAsString(entities);
+                            jdbcTemplate.update(
+                                    "UPDATE documents SET extracted_entities = ?::jsonb WHERE id = ?::uuid",
+                                    entitiesJson, docIdForEntities);
+                            log.info("Extracted {} entity categories for doc {}", entities.size(), docIdForEntities);
+                        }
+                    } catch (Exception ex) {
+                        log.warn("Failed to extract/save entities for doc {}: {}", docIdForEntities, ex.getMessage());
                     }
                 }
 

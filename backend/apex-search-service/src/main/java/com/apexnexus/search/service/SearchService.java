@@ -205,6 +205,58 @@ public class SearchService {
                 })));
             }
 
+            // Zero-trust scope: non-admin callers can only see documents in projects they belong
+            // to (or documents they authored themselves, e.g. personal uploads with no project).
+            if (!com.apexnexus.common.security.SecurityContextUtil.isSystemAdmin()) {
+                java.util.Set<UUID> accessibleProjects =
+                        com.apexnexus.common.security.SecurityContextUtil.accessibleProjectIds();
+                String callerId = userId != null ? userId.toString() : null;
+                boolBuilder.filter(Query.of(q -> q.bool(scope -> {
+                    if (!accessibleProjects.isEmpty()) {
+                        scope.should(Query.of(qq -> qq.terms(t -> t
+                                .field("projectId")
+                                .terms(tv -> tv.value(accessibleProjects.stream()
+                                        .map(id -> co.elastic.clients.elasticsearch._types.FieldValue.of(id.toString()))
+                                        .toList())))));
+                    }
+                    if (callerId != null) {
+                        scope.should(Query.of(qq -> qq.term(t -> t.field("authorId").value(callerId))));
+                    }
+                    // If caller has no projects and no id, match-none (no results).
+                    if (accessibleProjects.isEmpty() && callerId == null) {
+                        scope.mustNot(Query.of(qq -> qq.matchAll(ma -> ma)));
+                    }
+                    scope.minimumShouldMatch("1");
+                    return scope;
+                })));
+            }
+
+            // Zero-trust scope: non-admin callers can only see documents in projects they belong
+            // to (or documents they authored themselves, e.g. personal uploads with no project).
+            if (!com.apexnexus.common.security.SecurityContextUtil.isSystemAdmin()) {
+                java.util.Set<UUID> accessibleProjects =
+                        com.apexnexus.common.security.SecurityContextUtil.accessibleProjectIds();
+                String callerId = userId != null ? userId.toString() : null;
+                boolBuilder.filter(Query.of(q -> q.bool(scope -> {
+                    if (!accessibleProjects.isEmpty()) {
+                        scope.should(Query.of(qq -> qq.terms(t -> t
+                                .field("projectId")
+                                .terms(tv -> tv.value(accessibleProjects.stream()
+                                        .map(id -> co.elastic.clients.elasticsearch._types.FieldValue.of(id.toString()))
+                                        .toList())))));
+                    }
+                    if (callerId != null) {
+                        scope.should(Query.of(qq -> qq.term(t -> t.field("authorId").value(callerId))));
+                    }
+                    // If caller has no projects and no id, match-none (no results).
+                    if (accessibleProjects.isEmpty() && callerId == null) {
+                        scope.mustNot(Query.of(qq -> qq.matchAll(ma -> ma)));
+                    }
+                    scope.minimumShouldMatch("1");
+                    return scope;
+                })));
+            }
+
             // Build search request
             int from = request.getPage() * request.getSize();
             co.elastic.clients.elasticsearch.core.SearchRequest esRequest =

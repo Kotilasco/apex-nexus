@@ -86,6 +86,9 @@ export default function DashboardPage() {
   const [auditData, setAuditData] = useState<AuditData | null>(null);
   const [workflowStatus, setWorkflowStatus] = useState<WorkflowStatusData[]>([]);
   const [projectDocs, setProjectDocs] = useState<ProjectDocData[]>([]);
+  const [myApprovals, setMyApprovals] = useState<any[]>([]);
+  const [myCheckouts, setMyCheckouts] = useState<any[]>([]);
+  const [myNotifications, setMyNotifications] = useState<any[]>([]);
 
   /* ── Load all dashboard data ── */
   const loadData = useCallback(async (showRefresh = false) => {
@@ -200,6 +203,33 @@ export default function DashboardPage() {
         setProjectDocs(await Promise.all(projDocPromises));
       }
     } catch { /* ignore */ }
+
+    // My Work: parallel fetch
+    try {
+      const [apRes, coRes, ntRes] = await Promise.allSettled([
+        workflowApi.getPendingApprovals(0, 5),
+        documentApi.myCheckouts(),
+        notificationApi.getMy(0, 5),
+      ]);
+      const apData = apRes.status === 'fulfilled'
+        ? (apRes.value?.data?.data ?? apRes.value?.data)
+        : null;
+      const apList = Array.isArray(apData) ? apData : (apData?.content ?? []);
+      setMyApprovals(apList.slice(0, 5));
+
+      const coData = coRes.status === 'fulfilled'
+        ? (coRes.value?.data?.data ?? coRes.value?.data)
+        : null;
+      const coList = Array.isArray(coData) ? coData : (coData?.content ?? []);
+      setMyCheckouts(coList.slice(0, 5));
+
+      const ntData = ntRes.status === 'fulfilled'
+        ? (ntRes.value?.data?.data ?? ntRes.value?.data)
+        : null;
+      const ntList = Array.isArray(ntData) ? ntData : (ntData?.content ?? []);
+      setMyNotifications(ntList.slice(0, 5));
+    } catch { /* ignore */ }
+
     setLoading(false);
     setRefreshing(false);
   }, []);
@@ -502,6 +532,97 @@ export default function DashboardPage() {
           ))}
         </div>
       )}
+
+      {/* My Work — personal task feed */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-amber-600" /> My Pending Approvals
+            </h3>
+            <Link href="/workflow" className="text-xs text-primary-600 hover:underline">View all</Link>
+          </div>
+          {myApprovals.length === 0 ? (
+            <p className="text-xs text-slate-400 italic py-4 text-center">
+              Nothing awaiting your approval. 🎉
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {myApprovals.map((a: any) => (
+                <li key={a.id} className="border border-slate-100 rounded-lg p-2 hover:bg-slate-50">
+                  <Link href={`/workflow?id=${a.id}`} className="block">
+                    <p className="text-xs font-medium text-slate-800 truncate">
+                      {a.documentTitle || a.document?.title || a.definitionName || 'Approval task'}
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      {a.currentState || 'pending'}
+                      {a.startedAt && ` · ${new Date(a.startedAt).toLocaleDateString()}`}
+                    </p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+              <FileCheck className="h-4 w-4 text-emerald-600" /> My Checked-Out Documents
+            </h3>
+            <Link href="/documents?view=checkouts" className="text-xs text-primary-600 hover:underline">View all</Link>
+          </div>
+          {myCheckouts.length === 0 ? (
+            <p className="text-xs text-slate-400 italic py-4 text-center">
+              No documents currently checked out.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {myCheckouts.map((d: any) => (
+                <li key={d.id} className="border border-slate-100 rounded-lg p-2 hover:bg-slate-50">
+                  <Link href={`/documents?id=${d.id}`} className="block">
+                    <p className="text-xs font-medium text-slate-800 truncate">{d.title}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Checked out{d.checkedOutAt && ` ${new Date(d.checkedOutAt).toLocaleDateString()}`}
+                    </p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+              <Bell className="h-4 w-4 text-indigo-600" /> Recent Notifications
+            </h3>
+            <Link href="/notifications" className="text-xs text-primary-600 hover:underline">View all</Link>
+          </div>
+          {myNotifications.length === 0 ? (
+            <p className="text-xs text-slate-400 italic py-4 text-center">
+              No recent notifications.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {myNotifications.map((n: any) => (
+                <li
+                  key={n.id}
+                  className={`border rounded-lg p-2 ${n.read ? 'border-slate-100' : 'border-indigo-200 bg-indigo-50/40'}`}
+                >
+                  <p className="text-xs font-medium text-slate-800 truncate">{n.title || n.type}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5 line-clamp-2">
+                    {n.message}
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    {n.createdAt && new Date(n.createdAt).toLocaleString()}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
 
       {/* Quick actions */}
       <div className="bg-white rounded-xl border border-slate-200 p-6">

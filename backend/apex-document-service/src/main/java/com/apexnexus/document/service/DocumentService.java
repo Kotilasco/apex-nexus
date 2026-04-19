@@ -5,13 +5,16 @@ import com.apexnexus.common.audit.AuditPublisher;
 import com.apexnexus.common.exception.BusinessException;
 import com.apexnexus.common.exception.ConflictException;
 import com.apexnexus.common.exception.ResourceNotFoundException;
+import com.apexnexus.common.security.SecurityContextUtil;
 import com.apexnexus.document.dto.*;
 import com.apexnexus.document.model.Document;
 import com.apexnexus.document.model.DocumentNote;
 import com.apexnexus.document.model.DocumentVersion;
+import com.apexnexus.document.model.Folder;
 import com.apexnexus.document.repository.DocumentNoteRepository;
 import com.apexnexus.document.repository.DocumentRepository;
 import com.apexnexus.document.repository.DocumentVersionRepository;
+import com.apexnexus.document.repository.FolderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -36,6 +39,7 @@ public class DocumentService {
     private final DocumentRepository documentRepository;
     private final DocumentVersionRepository versionRepository;
     private final DocumentNoteRepository noteRepository;
+    private final FolderRepository folderRepository;
     private final StorageService storageService;
     private final RedisTemplate<String, String> redisTemplate;
     private final AuditPublisher auditPublisher;
@@ -43,6 +47,7 @@ public class DocumentService {
     private final SearchIndexPublisher searchIndexPublisher;
     private final JdbcTemplate jdbcTemplate;
     private final VersionAnomalyClient versionAnomalyClient;
+    private final com.apexnexus.common.notification.NotificationPublisher notificationPublisher;
 
     @Transactional
     public DocumentDto createDocument(CreateDocumentRequest request, MultipartFile file, UUID authorId)
@@ -130,7 +135,8 @@ public class DocumentService {
                 .retentionPeriodYears(retentionYears)
                 .retentionPeriodMinutes(request.getRetentionPeriodMinutes())
                 .retentionStartDate(Instant.now())
-                .retentionExpiry(calculateRetentionExpiry(Instant.now(), retentionYears, request.getRetentionPeriodMinutes()))
+                .retentionExpiry(
+                        calculateRetentionExpiry(Instant.now(), retentionYears, request.getRetentionPeriodMinutes()))
                 .privacyRedactionEnabled(privacyRedaction)
                 .build();
 
@@ -166,11 +172,32 @@ public class DocumentService {
     @Transactional(readOnly = true)
     public DocumentDto getDocument(UUID documentId) {
         Document doc = findDocumentOrThrow(documentId);
+        SecurityContextUtil.requireResourceAccess(doc.getProjectId(), doc.getAuthorId());
+        try {
+            auditPublisher.publish(AuditEvent.builder()
+                    .userId(SecurityContextUtil.currentUserId())
+                    .action("VIEW")
+                    .resourceType("DOCUMENT")
+                    .resourceId(documentId)
+                    .resourceName(doc.getTitle())
+                    .build());
+        } catch (Exception ignored) { /* never block reads */ }
         return mapToDto(doc);
     }
 
     @Transactional(readOnly = true)
+    public List<DocumentDto> getChildDocuments(UUID parentDocumentId) {
+        Document parent = findDocumentOrThrow(parentDocumentId);
+        SecurityContextUtil.requireResourceAccess(parent.getProjectId(), parent.getAuthorId());
+        return documentRepository.findByParentDocumentId(parentDocumentId)
+                .stream().map(this::mapToDto).toList();
+    }
+
+    @Transactional(readOnly = true)
     public Page<DocumentDto> getDocumentsByFolder(UUID folderId, Pageable pageable) {
+        Folder folder = folderRepository.findById(folderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Folder", "id", folderId));
+        SecurityContextUtil.requireResourceAccess(folder.getProjectId(), folder.getOwnerId());
         return documentRepository.findByFolderId(folderId, pageable).map(this::mapToDto);
     }
 
@@ -181,7 +208,10 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public Page<DocumentDto> getDocumentsByProject(UUID projectId, Pageable pageable) {
-        return documentRepository.findByProjectId(projectId, pageable).map(this::mapToDto);
+        SecurityContextUtil.requireProjectAccess(projectId);
+        return documentRepository
+                .findByProjectIdAndStatusNotIn(projectId, List.of("DESTROYED", "PENDING_DESTRUCTION"), pageable)
+                .map(this::mapToDto);
     }
 
     @Transactional(readOnly = true)
@@ -191,11 +221,14 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public Page<DocumentDto> getDocumentsByProjectAndFolder(UUID projectId, UUID folderId, Pageable pageable) {
-        return documentRepository.findByProjectIdAndFolderId(projectId, folderId, pageable).map(this::mapToDto);
+        SecurityContextUtil.requireProjectAccess(projectId);
+        return documentRepository.findByProjectIdAndFolderIdAndStatusNotIn(projectId, folderId,
+                List.of("DESTROYED", "PENDING_DESTRUCTION"), pageable).map(this::mapToDto);
     }
 
     public byte[] downloadDocument(UUID documentId, UUID userId) throws Exception {
         Document doc = findDocumentOrThrow(documentId);
+        SecurityContextUtil.requireResourceAccess(doc.getProjectId(), doc.getAuthorId());
         byte[] data = storageService.retrieveFile(doc.getStorageKey());
 
         auditPublisher.publish(AuditEvent.builder()
@@ -567,6 +600,11 @@ public class DocumentService {
         // Reindex with new file content
         searchIndexPublisher.publishReindex(doc, fileData);
 
+        // Notify project members (except the checker-in) that a new version exists.
+        notifyProjectMembers(doc, userId, "DOCUMENT_CHECKED_IN",
+                "New version of " + doc.getTitle(),
+                "Version " + newVersion + " of '" + doc.getTitle() + "' has been checked in.");
+
         return mapToDto(doc);
     }
 
@@ -671,8 +709,10 @@ public class DocumentService {
     // ============ LEGAL HOLD ============
 
     /**
-     * Re-index all existing documents into Elasticsearch with full content extraction.
-     * Loads file data from storage so the search service can extract text for full-text search.
+     * Re-index all existing documents into Elasticsearch with full content
+     * extraction.
+     * Loads file data from storage so the search service can extract text for
+     * full-text search.
      * Returns the number of documents queued for indexing.
      */
     @Transactional(readOnly = true)
@@ -1110,8 +1150,15 @@ public class DocumentService {
     }
 
     private Document findDocumentOrThrow(UUID id) {
-        return documentRepository.findById(id)
+        Document doc = documentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Document", "id", id));
+        // Zero-trust: enforce project membership / ownership on every document lookup.
+        // System admins bypass. Callers outside of an HTTP request (schedulers,
+        // internal consumers) are also exempt because no request context is present.
+        if (org.springframework.web.context.request.RequestContextHolder.getRequestAttributes() != null) {
+            SecurityContextUtil.requireResourceAccess(doc.getProjectId(), doc.getAuthorId());
+        }
+        return doc;
     }
 
     /**
@@ -1130,7 +1177,8 @@ public class DocumentService {
 
     /**
      * Update retention for a specific document.
-     * The new retention cannot exceed the project's default retention (if in a project).
+     * The new retention cannot exceed the project's default retention (if in a
+     * project).
      */
     @Transactional
     public DocumentDto updateRetention(UUID docId, Integer retentionYears, Integer retentionMinutes, UUID userId) {
@@ -1172,7 +1220,8 @@ public class DocumentService {
             doc.setRetentionPeriodMinutes(null);
         }
         doc.setRetentionStartDate(start);
-        doc.setRetentionExpiry(calculateRetentionExpiry(start, doc.getRetentionPeriodYears(), doc.getRetentionPeriodMinutes()));
+        doc.setRetentionExpiry(
+                calculateRetentionExpiry(start, doc.getRetentionPeriodYears(), doc.getRetentionPeriodMinutes()));
         doc = documentRepository.save(doc);
 
         auditPublisher.publish(AuditEvent.builder()
@@ -1240,8 +1289,11 @@ public class DocumentService {
                 .m365Link(doc.getM365Link())
                 .docusignEnvelopeId(doc.getDocusignEnvelopeId())
                 .sapDocumentNumber(doc.getSapDocumentNumber())
+                .extractedEntities(doc.getExtractedEntities())
                 .aiGenerated(doc.getAiGenerated())
                 .aiConfidence(doc.getAiConfidence())
+                .parentDocumentId(doc.getParentDocumentId())
+                .emailMessageId(doc.getEmailMessageId())
                 .tags(doc.getTags())
                 .metadata(doc.getMetadataJson())
                 .createdAt(doc.getCreatedAt())
@@ -1320,5 +1372,42 @@ public class DocumentService {
                 .createdAt(n.getCreatedAt())
                 .updatedAt(n.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * Notify all members of a document's project (excluding the actor) about a
+     * significant event. For personal documents (no project) only the author is
+     * notified when someone else acts on it.
+     */
+    private void notifyProjectMembers(Document doc, UUID actorId, String type,
+                                      String title, String message) {
+        try {
+            java.util.Set<UUID> recipients = new java.util.HashSet<>();
+            if (doc.getProjectId() != null) {
+                java.util.List<UUID> members = jdbcTemplate.query(
+                        "SELECT user_id FROM project_members WHERE project_id = ?",
+                        (rs, i) -> (UUID) rs.getObject("user_id"),
+                        doc.getProjectId());
+                recipients.addAll(members);
+            }
+            if (doc.getAuthorId() != null) {
+                recipients.add(doc.getAuthorId());
+            }
+            recipients.remove(actorId); // don't notify the person who did the action
+            for (UUID uid : recipients) {
+                notificationPublisher.publish(
+                        com.apexnexus.common.notification.NotificationEvent.builder()
+                                .userId(uid)
+                                .type(type)
+                                .title(title)
+                                .message(message)
+                                .resourceType("DOCUMENT")
+                                .resourceId(doc.getId())
+                                .sendEmail(false)
+                                .build());
+            }
+        } catch (Exception e) {
+            log.warn("notifyProjectMembers failed for doc {}: {}", doc.getId(), e.getMessage());
+        }
     }
 }

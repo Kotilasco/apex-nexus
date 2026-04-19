@@ -3,6 +3,7 @@ package com.apexnexus.retention.controller;
 import com.apexnexus.common.dto.ApiResponse;
 import com.apexnexus.common.dto.PagedResponse;
 import com.apexnexus.retention.dto.*;
+import com.apexnexus.retention.model.DispositionStatus;
 import com.apexnexus.retention.service.RetentionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +47,17 @@ public class RetentionController {
     }
 
     // ==================== Dispositions ====================
+
+    @GetMapping("/dispositions")
+    public ResponseEntity<ApiResponse<PagedResponse<DispositionItemDto>>> getDispositions(
+            @RequestParam(defaultValue = "PENDING") String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        DispositionStatus dispositionStatus = DispositionStatus.valueOf(status);
+        Page<DispositionItemDto> result = retentionService.getDispositionsByStatus(dispositionStatus,
+                PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "scheduledDestructionDate")));
+        return ResponseEntity.ok(ApiResponse.success(PagedResponse.of(result)));
+    }
 
     @GetMapping("/dispositions/pending")
     public ResponseEntity<ApiResponse<PagedResponse<DispositionItemDto>>> getPending(

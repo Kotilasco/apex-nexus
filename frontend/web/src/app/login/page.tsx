@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
-import { Database, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,15 +33,22 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-primary-900 p-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      style={{ background: 'linear-gradient(135deg, #001A4D 0%, #003DA5 40%, #0052CC 70%, #001A4D 100%)' }}>
+      {/* Background image */}
+      <div className="absolute inset-0 z-0">
+        <Image src="/zetdc-bg.svg" alt="" fill className="object-cover opacity-60" priority />
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary-600 rounded-2xl mb-4">
-            <Database className="h-8 w-8 text-white" />
+          <div className="inline-flex items-center justify-center w-28 h-28 rounded-full bg-white backdrop-blur-sm border-2 border-yellow-400/60 shadow-lg shadow-yellow-500/20 mb-4 overflow-hidden p-1">
+            <Image src="/zetdc-logo.png" alt="ZETDC" width={112} height={112} className="object-contain" priority />
           </div>
-          <h1 className="text-3xl font-bold text-white">Apex Nexus</h1>
-          <p className="text-slate-400 mt-1">Enterprise Content Management</p>
+          <h1 className="text-3xl font-bold text-white">ZETDC</h1>
+          <p className="text-blue-200/70 mt-1">Zimbabwe Electricity Transmission &amp; Distribution Company</p>
+          <p className="text-yellow-300/50 text-xs mt-1">Document Management System</p>
         </div>
 
         {/* Card */}
@@ -92,7 +100,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg transition disabled:opacity-50"
+              className="w-full py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-medium rounded-lg transition disabled:opacity-50 shadow-md"
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>

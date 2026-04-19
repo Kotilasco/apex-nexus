@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -13,7 +14,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Database,
   Bell,
   ShieldCheck,
   BarChart3,
@@ -23,16 +23,35 @@ import {
   Factory,
   Layers,
   FolderKanban,
-  Mail
+  Mail,
+  Sparkles,
+  Network,
+  Activity,
+  Inbox,
+  Bot,
+  Building2,
+  Telescope,
+  TrendingUp,
+  FolderHeart,
+  Leaf
 } from "lucide-react";
 
 const navItems = [
   // Everyone sees these
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/documents", label: "Documents", icon: FolderOpen },
+  { href: "/intake", label: "Intake", icon: Inbox },
+  { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/cases", label: "Cases", icon: FolderHeart },
+  { href: "/sustainability", label: "Sustainability", icon: Leaf },
+  { href: "/federated", label: "Federated Search", icon: Telescope },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/workflow", label: "Workflow", icon: GitBranch },
+  { href: "/predictions", label: "Predictions", icon: TrendingUp, roles: ["SYSTEM_ADMIN", "ADMIN", "DEPARTMENT_ADMIN"] },
+  { href: "/vendor-portals", label: "Vendor Portals", icon: Building2, roles: ["SYSTEM_ADMIN", "ADMIN", "DEPARTMENT_ADMIN"] },
   { href: "/search", label: "Search", icon: Search },
+  { href: "/apps", label: "Apps", icon: Sparkles },
+  { href: "/knowledge-graph", label: "Knowledge Graph", icon: Network },
   { href: "/notifications", label: "Notifications", icon: Bell },
   // Role-gated items
   { href: "/retention", label: "Retention", icon: Shield, roles: ["SYSTEM_ADMIN", "ADMIN", "RECORDS_MANAGER"] },
@@ -44,6 +63,7 @@ const navItems = [
   { href: "/email-ingestion", label: "Email Ingestion", icon: Mail, roles: ["SYSTEM_ADMIN", "ADMIN", "RECORDS_MANAGER"] },
   { href: "/trust-center", label: "Trust Center", icon: ShieldCheck, roles: ["SYSTEM_ADMIN", "ADMIN", "RECORDS_MANAGER", "DEPARTMENT_ADMIN"] },
   { href: "/analytics", label: "Analytics", icon: BarChart3, roles: ["SYSTEM_ADMIN", "ADMIN", "DEPARTMENT_ADMIN"] },
+  { href: "/analytics/workflow-health", label: "Workflow Health", icon: Activity, roles: ["SYSTEM_ADMIN", "ADMIN", "DEPARTMENT_ADMIN"] },
   { href: "/audit", label: "Audit Log", icon: ClipboardList, roles: ["SYSTEM_ADMIN", "ADMIN"] },
   { href: "/admin/users", label: "Users", icon: Users, roles: ["SYSTEM_ADMIN", "ADMIN"] },
   { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["SYSTEM_ADMIN", "ADMIN"] }
@@ -74,10 +94,10 @@ export default function Sidebar({ open, onToggle, currentPath, userRoles = [] }:
     >
       {/* Logo */}
       <div className="flex items-center h-16 px-4 border-b border-slate-700">
-        <Database className="h-7 w-7 text-primary-400 shrink-0" />
+        <Image src="/zetdc-logo.png" alt="ZETDC" width={32} height={32} className="shrink-0" />
         {open && (
           <span className="ml-3 text-lg font-bold tracking-tight">
-            Apex Nexus
+            ZETDC
           </span>
         )}
       </div>

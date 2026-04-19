@@ -102,6 +102,7 @@ export const documentApi = {
     api.get(`/documents/${id}/download`, { responseType: 'blob' }),
   getContent: (id: string) => api.get(`/documents/${id}/content`),
   getRedactedContent: (id: string) => api.get(`/documents/${id}/content/redacted`),
+  getChildren: (id: string) => api.get(`/documents/${id}/children`),
   updateContent: (id: string, content: string) =>
     api.put(`/documents/${id}/content`, { content }),
   delete: (id: string) => api.delete(`/documents/${id}`),
@@ -131,6 +132,12 @@ export const documentApi = {
   removeLegalHold: (id: string) => api.delete(`/documents/${id}/legal-hold`),
   updateRetention: (id: string, data: { retentionPeriodYears?: number; retentionPeriodMinutes?: number }) =>
     api.put(`/documents/${id}/retention`, data),
+  /* Document Links (cross-document relationships) */
+  getLinks: (id: string) => api.get(`/documents/${id}/links`),
+  createLink: (id: string, data: { targetDocumentId: string; linkType?: string; note?: string }) =>
+    api.post(`/documents/${id}/links`, data),
+  deleteLink: (id: string, linkId: string) =>
+    api.delete(`/documents/${id}/links/${linkId}`),
   /* Folders */
   getFolders: (parentId?: string) =>
     parentId ? api.get(`/folders/${parentId}/children`) : api.get('/folders/root'),
@@ -253,7 +260,7 @@ export const retentionApi = {
     api.put(`/retention/policies/${id}`, data),
   deletePolicy: (id: string) => api.delete(`/retention/policies/${id}`),
   getDispositions: (status?: string, page = 0, size = 20) =>
-    api.get('/retention/dispositions/pending', { params: { page, size } }),
+    api.get('/retention/dispositions', { params: { status: status || 'PENDING', page, size } }),
   approveDisposition: (id: string) => api.post(`/retention/dispositions/${id}/approve`),
   rejectDisposition: (id: string, reason: string) =>
     api.post(`/retention/dispositions/${id}/reject`, null, { params: { reason } }),
@@ -297,13 +304,17 @@ export const projectApi = {
   list: () => api.get('/projects'),
   getMine: () => api.get('/projects/mine'),
   get: (id: string) => api.get(`/projects/${id}`),
-  create: (data: { name: string; description?: string; aiEnabled?: boolean; parentProjectId?: string; defaultWorkflowDefinitionId?: string;
+  create: (data: {
+    name: string; description?: string; aiEnabled?: boolean; parentProjectId?: string; defaultWorkflowDefinitionId?: string;
     defaultRetentionPeriodYears?: number; retentionDocumentTypes?: string[]; jurisdictionCode?: string;
-    privacyRedactionEnabled?: boolean; complianceCategory?: string }) =>
+    privacyRedactionEnabled?: boolean; complianceCategory?: string
+  }) =>
     api.post('/projects', data),
-  update: (id: string, data: { name: string; description?: string; aiEnabled?: boolean; defaultWorkflowDefinitionId?: string | null;
+  update: (id: string, data: {
+    name: string; description?: string; aiEnabled?: boolean; defaultWorkflowDefinitionId?: string | null;
     defaultRetentionPeriodYears?: number; retentionDocumentTypes?: string[]; jurisdictionCode?: string;
-    privacyRedactionEnabled?: boolean; complianceCategory?: string }) =>
+    privacyRedactionEnabled?: boolean; complianceCategory?: string
+  }) =>
     api.put(`/projects/${id}`, data),
   getMembers: (id: string) => api.get(`/projects/${id}/members`),
   addMember: (id: string, data: { userId: string; roleId: string; permissions: string[] }) =>
@@ -398,12 +409,6 @@ export const forwardApi = {
     api.post(`/workflows/forwards/${forwardId}/complete`, null, { params: { response } }),
 };
 
-/* ── Document Presence ── */
-export const presenceApi = {
-  getViewers: (documentId: string) =>
-    api.get(`/notifications/presence/${documentId}`),
-};
-
 /* ── Document Preview ── */
 export const previewApi = {
   getPreviewUrl: (documentId: string) =>
@@ -467,6 +472,17 @@ export const aiApi = {
     api.post('/ai/ask', { content, title, question }),
 };
 
+export const documentConversationApi = {
+  listForDocument: (documentId: string) =>
+    api.get(`/documents/${documentId}/conversations`),
+  listForVersion: (versionId: string) =>
+    api.get(`/documents/versions/${versionId}/conversations`),
+  save: (documentId: string, body: { versionId?: string | null; title?: string; question: string; answer: string }) =>
+    api.post(`/documents/${documentId}/conversations`, body),
+  delete: (id: string) =>
+    api.delete(`/documents/conversations/${id}`),
+};
+
 /* ── Email Ingestion ── */
 export const emailIngestionApi = {
   getConfigs: () => api.get('/email-ingestion/configs'),
@@ -479,4 +495,221 @@ export const emailIngestionApi = {
   toggleRule: (ruleId: string) => api.patch(`/email-ingestion/rules/${ruleId}/toggle`),
   deleteRule: (ruleId: string) => api.delete(`/email-ingestion/rules/${ruleId}`),
   pollNow: (configId: string) => api.post(`/email-ingestion/configs/${configId}/poll`),
+};
+
+export const presenceApi = {
+  get: (documentId: string) =>
+    api.get(`/notifications/presence/${documentId}`),
+  heartbeat: (documentId: string, username?: string, displayName?: string) =>
+    api.post(`/notifications/presence/${documentId}/heartbeat`, null, {
+      params: { username, displayName },
+    }),
+  leave: (documentId: string) =>
+    api.delete(`/notifications/presence/${documentId}`),
+};
+
+/* ── POTRAZ / Zimbabwe DPA Compliance ── */
+export const complianceApi = {
+  // dashboard
+  dashboard: () => api.get('/compliance/potraz/dashboard'),
+
+  // consents
+  listConsents: (params?: { dataSubjectId?: string; status?: string }) =>
+    api.get('/compliance/consents', { params }),
+  createConsent: (data: any) => api.post('/compliance/consents', data),
+  withdrawConsent: (id: string) => api.post(`/compliance/consents/${id}/withdraw`),
+
+  // DSR
+  listDsrs: (status?: string) =>
+    api.get('/compliance/dsr', { params: status ? { status } : {} }),
+  getDsr: (id: string) => api.get(`/compliance/dsr/${id}`),
+  createDsr: (data: any) => api.post('/compliance/dsr', data),
+  updateDsrStatus: (id: string, status: string, notes?: string) =>
+    api.patch(`/compliance/dsr/${id}/status`, { status, notes }),
+  executeDsr: (id: string) => api.post(`/compliance/dsr/${id}/execute`),
+
+  // breaches
+  listBreaches: (status?: string) =>
+    api.get('/compliance/breaches', { params: status ? { status } : {} }),
+  getBreach: (id: string) => api.get(`/compliance/breaches/${id}`),
+  createBreach: (data: any) => api.post('/compliance/breaches', data),
+  notifyPotraz: (id: string, reference?: string) =>
+    api.post(`/compliance/breaches/${id}/notify-potraz`, { reference }),
+
+  // transfers
+  listTransfers: () => api.get('/compliance/transfers'),
+  createTransfer: (data: any) => api.post('/compliance/transfers', data),
+
+  // DST
+  listDst: (year?: number, month?: number) =>
+    api.get('/compliance/dst', { params: { year, month } }),
+  createDst: (data: any) => api.post('/compliance/dst', data),
+  dstSummary: (year?: number) =>
+    api.get('/compliance/dst/summary', { params: year ? { year } : {} }),
+
+  // PII
+  piiInventory: () => api.get('/compliance/pii/inventory'),
+  piiAccessLog: (documentId?: string, limit = 100) =>
+    api.get('/compliance/pii/access-log', { params: { documentId, limit } }),
+
+  // snapshots
+  listSnapshots: () => api.get('/compliance/snapshots'),
+  getSnapshot: (id: string) => api.get(`/compliance/snapshots/${id}`),
+  createSnapshot: (reportType: string = 'POTRAZ_AUDIT') =>
+    api.post('/compliance/snapshots', { reportType }),
+};
+
+
+/* ── Agentic AI + Federated search ── */
+const LONG_TIMEOUT = 180000; // LLM calls can take 30-90s
+// LLM-style Q&A and intent hints (kept for search page)
+export const askApi = {
+  ask: (question: string, topK: number = 5) =>
+    api.post('/search/ask', { question, topK }, { timeout: LONG_TIMEOUT }),
+  federated: (q: string, sources?: string[], size: number = 10) =>
+    api.get('/search/federated', { params: { q, size, sources: sources?.join(',') } }),
+  synthesize: (topic: string, topK: number = 8) =>
+    api.post('/search/synthesize', { topic, topK }, { timeout: LONG_TIMEOUT }),
+  intent: (prompt: string) =>
+    api.post('/search/intent', { prompt }, { timeout: LONG_TIMEOUT }),
+};
+
+// Proactive Intent Detection — reasons over every ingested document and proposes actions.
+export const agenticApi = {
+  suggestions: () => api.get('/agentic/suggestions'),
+  history: () => api.get('/agentic/suggestions/history'),
+  accept: (id: string) => api.post(`/agentic/suggestions/${id}/accept`),
+  dismiss: (id: string) => api.post(`/agentic/suggestions/${id}/dismiss`),
+  detect: (documentId: string) => api.post(`/agentic/detect/${documentId}`),
+  summary: () => api.get('/agentic/summary'),
+  team: () => api.get('/agentic/team'),
+  runAuditor: () => api.post('/agentic/team/auditor/run'),
+  runArchivist: () => api.post('/agentic/team/archivist/run'),
+  runBridge: () => api.post('/agentic/team/bridge/run'),
+};
+
+// Adaptive Case Management — non-linear, evidence-rich case folders.
+export const casesApi = {
+  list: (status?: string, category?: string) =>
+    api.get('/cases', { params: { status, category } }),
+  summary: () => api.get('/cases/summary'),
+  get: (id: string) => api.get(`/cases/${id}`),
+  create: (body: { title: string; description?: string; category: string; priority?: string; projectId?: string }) =>
+    api.post('/cases', body),
+  close: (id: string, outcome: string) =>
+    api.post(`/cases/${id}/close`, { outcome }),
+  setStatus: (id: string, status: string) =>
+    api.post(`/cases/${id}/status`, { status }),
+  addTask: (id: string, body: { title: string; description?: string; assigneeId?: string; dueAt?: string }) =>
+    api.post(`/cases/${id}/tasks`, body),
+  completeTask: (taskId: string) =>
+    api.post(`/cases/tasks/${taskId}/complete`),
+  attach: (id: string, documentId: string, note?: string) =>
+    api.post(`/cases/${id}/documents/${documentId}`, { note }),
+  invite: (id: string, body: { userId?: string; externalEmail?: string; role?: string }) =>
+    api.post(`/cases/${id}/participants`, body),
+};
+
+// Green IT / Sustainability — composite Green Index, kWh, CO2.
+export const sustainabilityApi = {
+  snapshot: () => api.get('/sustainability/snapshot'),
+  refresh: () => api.post('/sustainability/snapshot/refresh'),
+  trend: (days: number = 30) => api.get('/sustainability/trend', { params: { days } }),
+};
+
+// Federated Search — unified layer across Outlook / SharePoint / network shares / legacy ECM.
+export const federatedApi = {
+  sources: () => api.get('/federated/sources'),
+  search: (q: string, types?: string[]) =>
+    api.get('/federated/search', { params: { q, types: types?.join(',') } }),
+  toggleSource: (id: string, enabled: boolean) =>
+    api.post(`/federated/sources/${id}/toggle`, null, { params: { enabled } }),
+  createSource: (body: { name: string; sourceType: string; endpointUrl: string; authConfig?: string; docCountEstimate?: number; }) =>
+    api.post('/federated/sources', body),
+  updateSource: (id: string, patch: Record<string, any>) =>
+    api.patch(`/federated/sources/${id}`, patch),
+  deleteSource: (id: string) => api.delete(`/federated/sources/${id}`),
+  testSource: (id: string) => api.post(`/federated/sources/${id}/test`),
+  emailMailboxes: () => api.get('/federated/email-mailboxes'),
+  importFromEmail: () => api.post('/federated/import-from-email'),
+};
+
+// Vendor Portals — secured data rooms for external participants.
+export const vendorPortalApi = {
+  list: () => api.get('/vendor-portals'),
+  summary: () => api.get('/vendor-portals/summary'),
+  get: (id: string) => api.get(`/vendor-portals/${id}`),
+  create: (body: {
+    vendorCode: string; vendorName: string; contactEmail?: string;
+    projectId?: string; requiredDocs?: string[]; expiryDays?: number;
+  }) => api.post('/vendor-portals', body),
+  revoke: (id: string) => api.post(`/vendor-portals/${id}/revoke`),
+  approve: (uploadId: string, notes?: string) =>
+    api.post(`/vendor-portals/uploads/${uploadId}/approve`, { notes }),
+  reject: (uploadId: string, notes?: string) =>
+    api.post(`/vendor-portals/uploads/${uploadId}/reject`, { notes }),
+  addComplianceDoc: (portalId: string, body: { docType: string; label?: string; expiresOn: string; validFrom?: string; uploadId?: string; }) =>
+    api.post(`/vendor-portals/${portalId}/compliance-docs`, body),
+  removeComplianceDoc: (cdId: string) =>
+    api.delete(`/vendor-portals/compliance-docs/${cdId}`),
+};
+
+// Process Intelligence — predictive bottlenecks + reassignment suggestions.
+export const predictionApi = {
+  list: () => api.get('/workflows/predictions'),
+  summary: () => api.get('/workflows/predictions/summary'),
+  refresh: () => api.post('/workflows/predictions/refresh'),
+  reassign: (instanceId: string, userId: string) =>
+    api.post(`/workflows/predictions/${instanceId}/reassign`, { userId }),
+};
+
+// Advanced 2026 features
+export const notarizationApi = {
+  notarize: (documentId: string) => api.post(`/documents/${documentId}/notarize`),
+  verify: (documentId: string) => api.get(`/documents/${documentId}/verify`),
+};
+
+export const knowledgeGraphApi = {
+  graph: (params: { scope?: string; scopeId?: string; maxNodes?: number } = {}) =>
+    api.get('/documents/knowledge-graph', { params }),
+};
+
+export const workflowHealthApi = {
+  overview: (days: number = 30) =>
+    api.get('/workflows/health/overview', { params: { days } }),
+};
+
+export const intakeApi = {
+  upload: (files: File[], autoRoute = true, projectId?: string) => {
+    const fd = new FormData();
+    files.forEach((f) => fd.append('files', f));
+    const q = new URLSearchParams();
+    q.set('autoRoute', String(autoRoute));
+    if (projectId) q.set('projectId', projectId);
+    return api.post(`/intake/upload?${q.toString()}`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 600000,
+    });
+  },
+  classifyText: (fileName: string, mimeType: string, text: string) =>
+    api.post('/search/classify-text', { fileName, mimeType, text }, { timeout: 120000 }),
+  batch: (batchId: string) => api.get(`/intake/batches/${batchId}`),
+  recentBatches: () => api.get('/intake/batches'),
+  route: (intakeId: string, projectId?: string, startWorkflow = true) =>
+    api.post(`/intake/${intakeId}/route`, { projectId, startWorkflow }),
+};
+
+export const sapApi = {
+  summary: () => api.get('/sap/summary'),
+  purchaseOrders: () => api.get('/sap-mock/purchase-orders'),
+  purchaseOrder: (po: string) => api.get(`/sap-mock/purchase-orders/${po}`),
+  invoices: () => api.get('/sap-mock/invoices'),
+  assets: () => api.get('/sap-mock/assets'),
+  asset: (equipmentId: string) => api.get(`/sap-mock/assets/${equipmentId}`),
+  processInvoice: (documentId: string) =>
+    api.post(`/sap/invoices/process/${documentId}`, {}, { timeout: 120000 }),
+  linkAsset: (equipmentId: string, documentId: string, linkType = 'ATTACHMENT') =>
+    api.post(`/sap/assets/${equipmentId}/link/${documentId}?linkType=${linkType}`),
+  transactionDocuments: (arObject: string, objectKey: string) =>
+    api.get(`/sap/transactions/${arObject}/${objectKey}/documents`),
 };

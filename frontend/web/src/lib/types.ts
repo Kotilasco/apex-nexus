@@ -63,6 +63,8 @@ export interface Document {
   sapDocumentNumber?: string;
   aiGenerated?: boolean;
   aiConfidence?: number;
+  parentDocumentId?: string;
+  emailMessageId?: string;
   tags: string[];
   metadata?: Record<string, unknown>;
   authorId: string;

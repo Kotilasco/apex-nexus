@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -78,7 +79,7 @@ public class AuditConsumerService {
                         .details(event.get("details") != null ? castToStringMap(event.get("details")) : null)
                         .ipAddress((String) event.get("ipAddress"))
                         .userAgent((String) event.get("userAgent"))
-                        .createdAt(LocalDateTime.now())
+                        .createdAt(LocalDateTime.now().truncatedTo(ChronoUnit.MICROS))
                         .build();
 
                 // Compute tamper-evident hash chain

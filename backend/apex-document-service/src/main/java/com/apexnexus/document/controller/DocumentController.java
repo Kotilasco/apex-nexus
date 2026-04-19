@@ -4,7 +4,10 @@ import com.apexnexus.common.dto.ApiResponse;
 import com.apexnexus.common.dto.PagedResponse;
 import com.apexnexus.document.dto.*;
 import com.apexnexus.document.service.DocumentService;
+import com.apexnexus.document.service.DocumentLinkService;
 import com.apexnexus.document.service.PiiRedactionService;
+import com.apexnexus.document.service.NotarizationService;
+import com.apexnexus.document.service.KnowledgeGraphService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -26,6 +29,9 @@ public class DocumentController {
 
     private final DocumentService documentService;
     private final PiiRedactionService piiRedactionService;
+    private final DocumentLinkService documentLinkService;
+    private final NotarizationService notarizationService;
+    private final KnowledgeGraphService knowledgeGraphService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<DocumentDto>> createDocument(
@@ -40,6 +46,11 @@ public class DocumentController {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<DocumentDto>> getDocument(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(documentService.getDocument(id)));
+    }
+
+    @GetMapping("/{id}/children")
+    public ResponseEntity<ApiResponse<List<DocumentDto>>> getChildDocuments(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(documentService.getChildDocuments(id)));
     }
 
     @PutMapping("/{id}")
@@ -257,6 +268,33 @@ public class DocumentController {
         return ResponseEntity.ok(ApiResponse.ok(documentService.removeLegalHold(id, userId)));
     }
 
+    // --- Document Links (cross-document relationships) ---
+
+    @GetMapping("/{id}/links")
+    public ResponseEntity<ApiResponse<List<DocumentLinkDto>>> getLinks(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(documentLinkService.getLinksForDocument(id)));
+    }
+
+    @PostMapping("/{id}/links")
+    public ResponseEntity<ApiResponse<DocumentLinkDto>> createLink(
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateDocumentLinkRequest request,
+            Authentication auth) {
+        UUID userId = (UUID) auth.getPrincipal();
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok("Link created", documentLinkService.createLink(id, request, userId)));
+    }
+
+    @DeleteMapping("/{id}/links/{linkId}")
+    public ResponseEntity<ApiResponse<Void>> deleteLink(
+            @PathVariable UUID id,
+            @PathVariable UUID linkId,
+            Authentication auth) {
+        UUID userId = (UUID) auth.getPrincipal();
+        documentLinkService.deleteLink(id, linkId, userId);
+        return ResponseEntity.ok(ApiResponse.ok("Link deleted", null));
+    }
+
     // --- Retention ---
 
     @PutMapping("/{id}/retention")
@@ -273,11 +311,24 @@ public class DocumentController {
     // --- Text content editing ---
 
     @GetMapping("/{id}/content")
-    public ResponseEntity<ApiResponse<Map<String, String>>> getTextContent(@PathVariable UUID id, Authentication auth)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getTextContent(@PathVariable UUID id, Authentication auth)
             throws Exception {
         UUID userId = (UUID) auth.getPrincipal();
         String text = documentService.getTextContent(id, userId);
-        return ResponseEntity.ok(ApiResponse.ok(Map.of("content", text)));
+        // Zero-Trust PII Shield: auto-mask for non-admin viewers
+        boolean admin = com.apexnexus.common.security.SecurityContextUtil.isSystemAdmin();
+        boolean masked = false;
+        if (!admin && text != null && !text.isBlank()) {
+            DocumentDto doc = documentService.getDocument(id);
+            boolean isOwner = doc.getAuthorId() != null && doc.getAuthorId().equals(userId);
+            if (!isOwner) {
+                text = piiRedactionService.redact(text);
+                masked = true;
+            }
+        }
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+                "content", text != null ? text : "",
+                "piiMasked", masked)));
     }
 
     @GetMapping("/{id}/content/redacted")
@@ -356,6 +407,26 @@ public class DocumentController {
                 "piiScanDate", doc.getPiiScanDate() != null ? doc.getPiiScanDate().toString() : "",
                 "privacyRedactionEnabled", Boolean.TRUE.equals(doc.getPrivacyRedactionEnabled()));
         return ResponseEntity.ok(ApiResponse.ok(piiInfo));
+    }
+
+    // --- Blockchain Notarization ---
+    @PostMapping("/{id}/notarize")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> notarize(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(notarizationService.notarize(id)));
+    }
+
+    @GetMapping("/{id}/verify")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> verify(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok(notarizationService.verify(id)));
+    }
+
+    // --- Knowledge Graph ---
+    @GetMapping("/knowledge-graph")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> knowledgeGraph(
+            @RequestParam(required = false) String scope,
+            @RequestParam(required = false) UUID scopeId,
+            @RequestParam(required = false, defaultValue = "150") int maxNodes) {
+        return ResponseEntity.ok(ApiResponse.ok(knowledgeGraphService.buildGraph(scope, scopeId, maxNodes)));
     }
 
     private <T> PagedResponse<T> toPagedResponse(Page<T> page) {

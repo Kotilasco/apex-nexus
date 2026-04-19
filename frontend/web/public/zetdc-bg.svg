@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#003DA5;stop-opacity:1" />
+      <stop offset="40%" style="stop-color:#0052CC;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#003080;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#001A4D;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="glow-gold" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD700;stop-opacity:0.18" />
+      <stop offset="100%" style="stop-color:#FFD700;stop-opacity:0" />
+    </linearGradient>
+    <linearGradient id="glow-red" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#D50000;stop-opacity:0.12" />
+      <stop offset="100%" style="stop-color:#D50000;stop-opacity:0" />
+    </linearGradient>
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#1565C0" stroke-width="0.5" opacity="0.25" />
+    </pattern>
+  </defs>
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="url(#bg)" />
+  <!-- Grid pattern -->
+  <rect width="1920" height="1080" fill="url(#grid)" />
+  <!-- Glow effect top - gold -->
+  <ellipse cx="960" cy="0" rx="900" ry="400" fill="url(#glow-gold)" />
+  <!-- Glow effect bottom - red -->
+  <ellipse cx="400" cy="1080" rx="800" ry="400" fill="url(#glow-red)" />
+  <!-- Power lines decoration - yellow tint -->
+  <line x1="0" y1="200" x2="400" y2="250" stroke="#FFD700" stroke-width="1" opacity="0.15" />
+  <line x1="400" y1="250" x2="800" y2="220" stroke="#FFD700" stroke-width="1" opacity="0.15" />
+  <line x1="800" y1="220" x2="1200" y2="260" stroke="#FFD700" stroke-width="1" opacity="0.15" />
+  <line x1="1200" y1="260" x2="1600" y2="230" stroke="#FFD700" stroke-width="1" opacity="0.15" />
+  <line x1="1600" y1="230" x2="1920" y2="245" stroke="#FFD700" stroke-width="1" opacity="0.15" />
+  <!-- Catenary lines lower -->
+  <line x1="0" y1="700" x2="500" y2="740" stroke="#FFD700" stroke-width="1" opacity="0.1" />
+  <line x1="500" y1="740" x2="1000" y2="710" stroke="#FFD700" stroke-width="1" opacity="0.1" />
+  <line x1="1000" y1="710" x2="1500" y2="750" stroke="#FFD700" stroke-width="1" opacity="0.1" />
+  <line x1="1500" y1="750" x2="1920" y2="730" stroke="#FFD700" stroke-width="1" opacity="0.1" />
+  <!-- Tower silhouettes -->
+  <g opacity="0.1" fill="#64B5F6">
+    <!-- Tower 1 -->
+    <polygon points="200,800 220,500 230,500 250,800" />
+    <rect x="205" y="580" width="40" height="3" />
+    <rect x="208" y="620" width="34" height="3" />
+    <rect x="210" y="660" width="30" height="3" />
+    <!-- Tower 2 -->
+    <polygon points="700,850 720,550 730,550 750,850" />
+    <rect x="705" y="630" width="40" height="3" />
+    <rect x="708" y="670" width="34" height="3" />
+    <rect x="710" y="710" width="30" height="3" />
+    <!-- Tower 3 -->
+    <polygon points="1300,820 1320,520 1330,520 1350,820" />
+    <rect x="1305" y="600" width="40" height="3" />
+    <rect x="1308" y="640" width="34" height="3" />
+    <rect x="1310" y="680" width="30" height="3" />
+    <!-- Tower 4 -->
+    <polygon points="1750,840 1770,540 1780,540 1800,840" />
+    <rect x="1755" y="620" width="40" height="3" />
+    <rect x="1758" y="660" width="34" height="3" />
+    <rect x="1760" y="700" width="30" height="3" />
+  </g>
+  <!-- Wire connections between towers -->
+  <path d="M225 500 Q 462 470 725 550" stroke="#FFD700" stroke-width="1.5" fill="none" opacity="0.08" />
+  <path d="M725 550 Q 1012 490 1325 520" stroke="#FFD700" stroke-width="1.5" fill="none" opacity="0.08" />
+  <path d="M1325 520 Q 1537 500 1775 540" stroke="#FFD700" stroke-width="1.5" fill="none" opacity="0.08" />
+</svg>

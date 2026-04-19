@@ -1,677 +1,580 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from "react";
+import { sapApi } from "@/lib/api";
 import {
-  pluginApi, documentApi, workflowApi, auditApi, retentionApi,
-} from '@/lib/api';
-import type { Plugin, Document } from '@/lib/types';
-import { formatDateTime, formatBytes, cn } from '@/lib/utils';
-import {
-  Layers, CheckCircle2, XCircle, RefreshCw, Play, Power, PowerOff,
-  ArrowUpFromLine, ArrowDownToLine, FileText, GitBranch, Shield,
-  ClipboardList, Zap, Server, Database, Link2, Activity,
-  ChevronDown, ChevronRight, Upload, Download, AlertTriangle, Clock,
-} from 'lucide-react';
+  Server,
+  Package,
+  Wrench,
+  Link2,
+  Upload,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  FileText,
+  Boxes,
+  Receipt,
+  Building2,
+  Tag,
+  Database,
+  AlertCircle,
+  PlayCircle,
+} from "lucide-react";
 
-/* ────────────── types ────────────── */
-interface ConnTestResult {
-  name: string;
-  endpoint: string;
-  status: 'idle' | 'testing' | 'pass' | 'fail';
-  latency?: number;
-  detail?: string;
-}
+type Tab = "summary" | "p2p" | "m2c" | "archivelink";
 
-interface SyncEvent {
-  id: number;
-  timestamp: string;
-  direction: 'IMPORT' | 'EXPORT';
-  objectType: string;
-  objectId: string;
-  status: 'SUCCESS' | 'FAILED';
-  detail: string;
-}
+export default function SapPage() {
+  const [tab, setTab] = useState<Tab>("summary");
 
-/* ─────── helpers ─────── */
-const SAP_PLUGIN_NAME = 'sap-erp-connector';
-
-const CAPABILITY_INFO: Record<string, { label: string; icon: typeof ArrowUpFromLine; color: string }> = {
-  'document.import': { label: 'Document Import', icon: ArrowDownToLine, color: 'text-blue-600' },
-  'document.export': { label: 'Document Export', icon: ArrowUpFromLine, color: 'text-green-600' },
-  'metadata.sync':   { label: 'Metadata Sync',   icon: RefreshCw,       color: 'text-violet-600' },
-  'invoice.post':    { label: 'Invoice Posting',  icon: FileText,        color: 'text-amber-600' },
-};
-
-/* ══════════════════════════════════════════ */
-export default function SapIntegrationPage() {
-  const [plugin, setPlugin] = useState<Plugin | null>(null);
-  const [pluginLoading, setPluginLoading] = useState(true);
-  const [toggling, setToggling] = useState(false);
-
-  /* Connection tests */
-  const [tests, setTests] = useState<ConnTestResult[]>([]);
-  const [running, setRunning] = useState(false);
-
-  /* Live data panels */
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [docCount, setDocCount] = useState(0);
-  const [approvalCount, setApprovalCount] = useState(0);
-  const [auditCount, setAuditCount] = useState(0);
-  const [retentionPolicies, setRetentionPolicies] = useState(0);
-  const [dataLoading, setDataLoading] = useState(true);
-
-  /* Sync simulation */
-  const [syncLog, setSyncLog] = useState<SyncEvent[]>([]);
-  const [syncing, setSyncing] = useState(false);
-
-  /* Expanded panels */
-  const [expandedPanels, setExpandedPanels] = useState<Record<string, boolean>>({
-    connection: true,
-    data: true,
-    sync: true,
-  });
-
-  /* ── Load SAP plugin ── */
-  const loadPlugin = useCallback(async () => {
-    setPluginLoading(true);
-    try {
-      const res = await pluginApi.getByName(SAP_PLUGIN_NAME);
-      setPlugin(res.data?.data ?? res.data ?? null);
-    } catch {
-      setPlugin(null);
-    }
-    setPluginLoading(false);
-  }, []);
-
-  /* ── Load live data ── */
-  const loadData = useCallback(async () => {
-    setDataLoading(true);
-    const [docRes, wfRes, auditRes, retRes] = await Promise.allSettled([
-      documentApi.list(undefined, 0, 5),
-      workflowApi.getPendingCount(),
-      auditApi.getStats(),
-      retentionApi.getPolicies(),
-    ]);
-    if (docRes.status === 'fulfilled') {
-      const d = docRes.value.data?.data ?? docRes.value.data;
-      setDocuments(d?.content ?? []);
-      setDocCount(d?.totalElements ?? 0);
-    }
-    if (wfRes.status === 'fulfilled') {
-      setApprovalCount(wfRes.value.data?.data ?? wfRes.value.data ?? 0);
-    }
-    if (auditRes.status === 'fulfilled') {
-      setAuditCount(auditRes.value.data?.data?.totalEntries ?? 0);
-    }
-    if (retRes.status === 'fulfilled') {
-      const r = retRes.value.data?.data ?? retRes.value.data;
-      setRetentionPolicies(Array.isArray(r) ? r.length : r?.totalElements ?? 0);
-    }
-    setDataLoading(false);
-  }, []);
-
-  useEffect(() => { loadPlugin(); loadData(); }, [loadPlugin, loadData]);
-
-  /* ── Toggle SAP connector ── */
-  const togglePlugin = async () => {
-    if (!plugin) return;
-    setToggling(true);
-    try {
-      if (plugin.status === 'ACTIVE') {
-        await pluginApi.deactivate(plugin.id);
-      } else {
-        await pluginApi.activate(plugin.id);
-      }
-      await loadPlugin();
-    } catch { /* ignore */ }
-    setToggling(false);
-  };
-
-  /* ── Connection test suite ── */
-  const runConnectionTests = async () => {
-    const endpoints: { name: string; endpoint: string; fn: () => Promise<unknown> }[] = [
-      { name: 'Auth Service', endpoint: 'GET /auth/me',          fn: () => import('@/lib/api').then(m => m.authApi.me()) },
-      { name: 'Document Service', endpoint: 'GET /documents/my', fn: () => documentApi.list(undefined, 0, 1) },
-      { name: 'Workflow Engine', endpoint: 'GET /workflow/definitions', fn: () => workflowApi.getDefinitions() },
-      { name: 'Search Service', endpoint: 'GET /search?q=sap',   fn: () => import('@/lib/api').then(m => m.searchApi.quick('sap', 0, 1)) },
-      { name: 'Retention Service', endpoint: 'GET /retention/policies', fn: () => retentionApi.getPolicies() },
-      { name: 'Audit Service', endpoint: 'GET /audit/stats',    fn: () => auditApi.getStats() },
-    ];
-
-    setRunning(true);
-    const results: ConnTestResult[] = endpoints.map(e => ({
-      name: e.name, endpoint: e.endpoint, status: 'testing' as const,
-    }));
-    setTests([...results]);
-
-    for (let i = 0; i < endpoints.length; i++) {
-      const start = performance.now();
-      try {
-        await endpoints[i].fn();
-        results[i] = { ...results[i], status: 'pass', latency: Math.round(performance.now() - start), detail: 'OK' };
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        results[i] = { ...results[i], status: 'fail', latency: Math.round(performance.now() - start), detail: msg };
-      }
-      setTests([...results]);
-    }
-    setRunning(false);
-  };
-
-  /* ── Simulate SAP sync ── */
-  const simulateSync = async () => {
-    setSyncing(true);
-    const events: SyncEvent[] = [];
-    let counter = syncLog.length;
-
-    // 1. Import: list documents SAP would pull
-    try {
-      const res = await documentApi.list(undefined, 0, 3);
-      const docs = res.data?.data?.content ?? [];
-      for (const doc of docs) {
-        counter++;
-        events.push({
-          id: counter,
-          timestamp: new Date().toISOString(),
-          direction: 'IMPORT',
-          objectType: 'Document',
-          objectId: doc.id.slice(0, 8),
-          status: 'SUCCESS',
-          detail: `Imported "${doc.title}" (${formatBytes(doc.fileSizeBytes || doc.fileSize || 0)})`,
-        });
-      }
-    } catch {
-      counter++;
-      events.push({
-        id: counter, timestamp: new Date().toISOString(),
-        direction: 'IMPORT', objectType: 'Document', objectId: '—',
-        status: 'FAILED', detail: 'Failed to reach Document Service',
-      });
-    }
-
-    // 2. Export: simulate posting an invoice doc
-    try {
-      const form = new FormData();
-      const blob = new Blob(['SAP Invoice #' + Date.now()], { type: 'text/plain' });
-      form.append('file', blob, `SAP_Invoice_${Date.now()}.txt`);
-      form.append('title', `SAP Invoice ${new Date().toLocaleDateString()}`);
-      form.append('description', 'Auto-generated by SAP ERP Connector');
-      form.append('tags', 'sap,invoice,erp');
-      const upload = await documentApi.upload(form);
-      const docId = upload.data?.data?.id ?? upload.data?.id ?? '?';
-      counter++;
-      events.push({
-        id: counter, timestamp: new Date().toISOString(),
-        direction: 'EXPORT', objectType: 'Invoice', objectId: docId.slice(0, 8),
-        status: 'SUCCESS', detail: `Exported SAP Invoice to Apex Nexus (doc: ${docId.slice(0, 8)}…)`,
-      });
-    } catch {
-      counter++;
-      events.push({
-        id: counter, timestamp: new Date().toISOString(),
-        direction: 'EXPORT', objectType: 'Invoice', objectId: '—',
-        status: 'FAILED', detail: 'Invoice upload failed',
-      });
-    }
-
-    // 3. Metadata sync: check workflow
-    try {
-      await workflowApi.getDefinitions();
-      counter++;
-      events.push({
-        id: counter, timestamp: new Date().toISOString(),
-        direction: 'IMPORT', objectType: 'Workflow Defs', objectId: '—',
-        status: 'SUCCESS', detail: 'Workflow definitions synced for approval routing',
-      });
-    } catch {
-      counter++;
-      events.push({
-        id: counter, timestamp: new Date().toISOString(),
-        direction: 'IMPORT', objectType: 'Workflow Defs', objectId: '—',
-        status: 'FAILED', detail: 'Workflow sync failed',
-      });
-    }
-
-    setSyncLog(prev => [...events, ...prev]);
-    await loadData(); // refresh live stats
-    setSyncing(false);
-  };
-
-  const toggle = (key: string) =>
-    setExpandedPanels(prev => ({ ...prev, [key]: !prev[key] }));
-
-  /* ── parse capabilities safely ── */
-  const capabilities: string[] = (() => {
-    if (!plugin?.capabilities) return [];
-    if (Array.isArray(plugin.capabilities)) return plugin.capabilities;
-    try { return JSON.parse(plugin.capabilities as unknown as string); } catch { return []; }
-  })();
-
-  const isActive = plugin?.status === 'ACTIVE';
-
-  /* ═════════════════════ RENDER ═════════════════════ */
   return (
-    <div className="space-y-6">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <Layers className="h-7 w-7 text-blue-600" />
-            SAP ERP Integration
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Bi-directional document sync with SAP ERP / S4HANA
-          </p>
+    <div className="p-8 max-w-7xl mx-auto">
+      <Header />
+      <Tabs tab={tab} setTab={setTab} />
+      <div className="mt-6">
+        {tab === "summary" && <SummaryTab />}
+        {tab === "p2p" && <P2PTab />}
+        {tab === "m2c" && <M2CTab />}
+        {tab === "archivelink" && <ArchiveLinkTab />}
+      </div>
+    </div>
+  );
+}
+
+function Header() {
+  return (
+    <div className="mb-6 flex items-center gap-3">
+      <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500/20 to-emerald-500/20 border border-blue-500/30">
+        <Server className="w-6 h-6 text-blue-400" />
+      </div>
+      <div>
+        <h1 className="text-2xl font-bold text-zinc-100">SAP Integration</h1>
+        <p className="text-sm text-zinc-400">
+          Apex Nexus as the <span className="text-zinc-200">System of Engagement</span> — SAP stays the{" "}
+          <span className="text-zinc-200">System of Record</span>. Procure-to-Pay, Meter-to-Cash and ArchiveLink all in
+          one place.
+          <span className="ml-2 italic text-zinc-500">Demo mode: Mock-S4H backend. Endpoint-compatible with real SAP OData.</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Tabs({ tab, setTab }: { tab: Tab; setTab: (t: Tab) => void }) {
+  const items: Array<{ key: Tab; label: string; icon: any }> = [
+    { key: "summary", label: "Overview", icon: Database },
+    { key: "p2p", label: "Procure-to-Pay", icon: Receipt },
+    { key: "m2c", label: "Asset / Meter-to-Cash", icon: Wrench },
+    { key: "archivelink", label: "ArchiveLink Viewer", icon: Link2 },
+  ];
+  return (
+    <div className="flex gap-1 border-b border-zinc-800">
+      {items.map((i) => {
+        const Icon = i.icon;
+        const active = tab === i.key;
+        return (
+          <button
+            key={i.key}
+            onClick={() => setTab(i.key)}
+            className={`px-4 py-2 text-sm flex items-center gap-2 border-b-2 transition ${
+              active
+                ? "border-blue-400 text-zinc-100"
+                : "border-transparent text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            <Icon className="w-4 h-4" />
+            {i.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ────────────── SUMMARY ────────────── */
+
+function SummaryTab() {
+  const [s, setS] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    sapApi.summary().then((r: any) => setS(r.data?.data)).finally(() => setLoading(false));
+  }, []);
+  if (loading) return <Loader />;
+  if (!s) return <div className="text-zinc-400 text-sm">No data.</div>;
+  const cards = [
+    { label: "Open Purchase Orders", value: s.openPOs, icon: Package, color: "text-blue-400" },
+    { label: "Invoices Submitted", value: s.totalInvoices, icon: Receipt, color: "text-emerald-400" },
+    { label: "Parked / Posted", value: s.parkedInvoices, icon: CheckCircle2, color: "text-emerald-400" },
+    { label: "Disputed", value: s.disputedInvoices, icon: AlertCircle, color: "text-amber-400" },
+    { label: "Assets Tracked", value: s.assetsTracked, icon: Boxes, color: "text-purple-400" },
+    { label: "Docs Linked to SAP", value: s.linkedDocuments, icon: Link2, color: "text-pink-400" },
+  ];
+  return (
+    <div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {cards.map((c) => {
+          const Icon = c.icon;
+          return (
+            <div key={c.label} className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-zinc-400">{c.label}</span>
+                <Icon className={`w-4 h-4 ${c.color}`} />
+              </div>
+              <div className="mt-2 text-2xl font-bold text-zinc-100">{c.value}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-6 rounded-lg border border-blue-500/30 bg-blue-500/5 p-4 text-sm text-zinc-300">
+        <div className="font-semibold text-zinc-100 mb-1 flex items-center gap-2">
+          <Server className="w-4 h-4 text-blue-400" /> How it works
         </div>
-        <button
-          onClick={() => { loadPlugin(); loadData(); }}
-          className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-slate-200 hover:bg-slate-50 transition"
-        >
-          <RefreshCw className="h-4 w-4" /> Refresh
-        </button>
+        <ul className="list-disc list-inside space-y-1 text-zinc-400">
+          <li>Procure-to-Pay: upload an invoice PDF → AI extracts PO # / amount / vendor → 3-way match vs SAP PO →
+            automatic parking in SAP (BUS2081) via ArchiveLink, or a dispute workflow.</li>
+          <li>Meter-to-Cash / Asset: field photos / inspection reports linked to SAP Equipment Records (EQUI). From
+            inside SAP Fiori the attachments appear natively.</li>
+          <li>Clean Core: nothing is written into SAP's database. We attach, we link — SAP stays pristine.</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────── P2P ────────────── */
+
+function P2PTab() {
+  const [pos, setPos] = useState<any[]>([]);
+  const [docId, setDocId] = useState("");
+  const [result, setResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [invoices, setInvoices] = useState<any[]>([]);
+
+  const reload = () => {
+    sapApi.purchaseOrders().then((r: any) => setPos(r.data?.data || []));
+    sapApi.invoices().then((r: any) => setInvoices(r.data?.data || []));
+  };
+  useEffect(reload, []);
+
+  const process = async () => {
+    if (!docId) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const r: any = await sapApi.processInvoice(docId.trim());
+      setResult(r.data?.data);
+      reload();
+    } catch (e: any) {
+      setResult({ error: e.response?.data?.message || e.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div>
+        <h3 className="text-sm font-semibold text-zinc-200 mb-2 flex items-center gap-2">
+          <Package className="w-4 h-4 text-blue-400" /> Open Purchase Orders in SAP
+        </h3>
+        <div className="rounded-lg border border-zinc-800 overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-zinc-900/60 text-zinc-400">
+              <tr>
+                <th className="text-left p-2">PO #</th>
+                <th className="text-left p-2">Vendor</th>
+                <th className="text-right p-2">Amount</th>
+                <th className="text-left p-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pos.map((p) => (
+                <tr key={p.po_number} className="border-t border-zinc-800">
+                  <td className="p-2 font-mono text-zinc-200">{p.po_number}</td>
+                  <td className="p-2 text-zinc-300">{p.vendor_name}</td>
+                  <td className="p-2 text-right text-zinc-300">{Number(p.amount).toLocaleString()}</td>
+                  <td className="p-2">
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] ${
+                        p.status === "OPEN"
+                          ? "bg-emerald-500/15 text-emerald-300"
+                          : "bg-zinc-700 text-zinc-300"
+                      }`}
+                    >
+                      {p.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {pos.length === 0 && (
+                <tr><td colSpan={4} className="p-4 text-center text-zinc-500">No POs</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <h3 className="text-sm font-semibold text-zinc-200 mt-6 mb-2 flex items-center gap-2">
+          <Receipt className="w-4 h-4 text-emerald-400" /> Invoice Ledger
+        </h3>
+        <div className="rounded-lg border border-zinc-800 overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-zinc-900/60 text-zinc-400">
+              <tr>
+                <th className="text-left p-2">SAP Invoice</th>
+                <th className="text-left p-2">PO #</th>
+                <th className="text-right p-2">Amount</th>
+                <th className="text-left p-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.map((i) => (
+                <tr key={i.invoice_id} className="border-t border-zinc-800">
+                  <td className="p-2 font-mono text-zinc-200">{i.invoice_id}</td>
+                  <td className="p-2 font-mono text-zinc-300">{i.po_number}</td>
+                  <td className="p-2 text-right text-zinc-300">{Number(i.amount).toLocaleString()}</td>
+                  <td className="p-2">
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] ${
+                        i.status === "PARKED" || i.status === "POSTED"
+                          ? "bg-emerald-500/15 text-emerald-300"
+                          : i.status === "DISPUTED"
+                          ? "bg-amber-500/15 text-amber-300"
+                          : "bg-zinc-700 text-zinc-300"
+                      }`}
+                    >
+                      {i.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {invoices.length === 0 && (
+                <tr><td colSpan={4} className="p-4 text-center text-zinc-500">No invoices yet</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* ── Plugin Status Card ── */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className={cn(
-                'h-14 w-14 rounded-xl flex items-center justify-center',
-                isActive ? 'bg-green-100' : 'bg-slate-100',
-              )}>
-                <Layers className={cn('h-7 w-7', isActive ? 'text-green-600' : 'text-slate-400')} />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  {plugin?.displayName ?? 'SAP ERP Connector'}
-                </h2>
-                <p className="text-sm text-slate-500">
-                  {plugin?.description ?? 'Loading…'}
-                </p>
-                <div className="flex items-center gap-3 mt-1 text-xs text-slate-400">
-                  <span>v{plugin?.version ?? '—'}</span>
-                  <span>·</span>
-                  <span>{plugin?.vendor ?? '—'}</span>
-                  <span>·</span>
-                  <span className="uppercase">{plugin?.pluginType ?? '—'}</span>
+      <div>
+        <h3 className="text-sm font-semibold text-zinc-200 mb-2 flex items-center gap-2">
+          <PlayCircle className="w-4 h-4 text-emerald-400" /> Process an Invoice Document
+        </h3>
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 space-y-3">
+          <p className="text-xs text-zinc-400">
+            Paste an Apex document ID (an invoice PDF you already captured via Intake). The system will extract the PO
+            number, run the 3-way match against SAP, and auto-park or dispute.
+          </p>
+          <input
+            value={docId}
+            onChange={(e) => setDocId(e.target.value)}
+            placeholder="Document UUID"
+            className="w-full rounded bg-zinc-950 border border-zinc-700 px-3 py-2 text-xs font-mono text-zinc-200"
+          />
+          <button
+            onClick={process}
+            disabled={loading || !docId}
+            className="px-4 py-2 rounded bg-gradient-to-r from-blue-500 to-emerald-500 text-white text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <PlayCircle className="w-4 h-4" />}
+            Run P2P Match
+          </button>
+          {result && (
+            <div className="rounded border border-zinc-700 bg-zinc-950 p-3 text-xs">
+              {result.error ? (
+                <div className="text-red-400 flex items-center gap-2">
+                  <XCircle className="w-4 h-4" /> {result.error}
                 </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {/* Status badge */}
-              <span className={cn(
-                'px-3 py-1 rounded-full text-xs font-semibold',
-                isActive ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500',
-              )}>
-                {plugin?.status ?? 'UNKNOWN'}
-              </span>
-
-              {/* Toggle button */}
-              <button
-                onClick={togglePlugin}
-                disabled={pluginLoading || toggling || !plugin}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition',
-                  isActive
-                    ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                    : 'bg-green-50 text-green-600 hover:bg-green-100',
-                  (pluginLoading || toggling) && 'opacity-50 cursor-not-allowed',
-                )}
-              >
-                {toggling ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : isActive ? (
-                  <PowerOff className="h-4 w-4" />
-                ) : (
-                  <Power className="h-4 w-4" />
-                )}
-                {isActive ? 'Deactivate' : 'Activate'}
-              </button>
-            </div>
-          </div>
-
-          {/* Capabilities */}
-          {capabilities.length > 0 && (
-            <div className="mt-5 flex flex-wrap gap-2">
-              {capabilities.map((cap) => {
-                const info = CAPABILITY_INFO[cap];
-                const Icon = info?.icon ?? Zap;
-                return (
-                  <span key={cap} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700">
-                    <Icon className={cn('h-3.5 w-3.5', info?.color ?? 'text-slate-400')} />
-                    {info?.label ?? cap}
-                  </span>
-                );
-              })}
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 mb-2">
+                    {result.status === "PARKED_IN_SAP" ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-amber-400" />
+                    )}
+                    <span className="font-semibold text-zinc-100">{result.status}</span>
+                    <span className="text-zinc-500">·</span>
+                    <span className="text-zinc-400">{result.action}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-zinc-300">
+                    <Field label="Extracted PO">{result.extracted?.poNumber || "—"}</Field>
+                    <Field label="Extracted Amount">{result.extracted?.amount ?? "—"}</Field>
+                    <Field label="Extracted Vendor">{result.extracted?.vendor || "—"}</Field>
+                    <Field label="Match">
+                      {result.sapMatch?.matched ? "YES" : "NO"}
+                      {result.sapMatch?.reason ? ` (${result.sapMatch.reason})` : ""}
+                    </Field>
+                    {result.sapInvoice?.sapInvoiceId && (
+                      <Field label="SAP Invoice ID">
+                        <span className="font-mono">{result.sapInvoice.sapInvoiceId}</span>
+                      </Field>
+                    )}
+                    {result.workflowId && (
+                      <Field label="Workflow">{result.workflowId}</Field>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
+        <div className="mt-4 rounded border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs text-zinc-300">
+          <div className="font-semibold text-zinc-100 mb-1">Try it with a sample invoice</div>
+          Upload a PDF/TXT on the <span className="text-emerald-300">Intake</span> page containing lines like:
+          <pre className="mt-1 text-[11px] bg-zinc-950 p-2 rounded text-zinc-300">{`From: Acme Power Systems Ltd
+Purchase Order: 4500012001
+Total Due: 42,500.00`}</pre>
+          Then paste the resulting document ID here.
+        </div>
       </div>
+    </div>
+  );
+}
 
-      {/* ── Connection Test Panel ── */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <button
-          onClick={() => toggle('connection')}
-          className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-slate-50 transition"
-        >
-          <div className="flex items-center gap-3">
-            <Activity className="h-5 w-5 text-blue-600" />
-            <h3 className="font-semibold text-slate-900">Connection Test</h3>
-            <span className="text-xs text-slate-400">Verify Apex Nexus API reachability from SAP connector</span>
-          </div>
-          {expandedPanels.connection ? <ChevronDown className="h-5 w-5 text-slate-400" /> : <ChevronRight className="h-5 w-5 text-slate-400" />}
-        </button>
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase text-zinc-500 tracking-wide">{label}</div>
+      <div>{children}</div>
+    </div>
+  );
+}
 
-        {expandedPanels.connection && (
-          <div className="px-6 pb-6 space-y-4">
-            <button
-              onClick={runConnectionTests}
-              disabled={running}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
-            >
-              {running ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              {running ? 'Testing…' : 'Run Connection Tests'}
-            </button>
+/* ────────────── M2C ────────────── */
 
-            {tests.length > 0 && (
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="text-left px-4 py-2 font-medium text-slate-600">Service</th>
-                      <th className="text-left px-4 py-2 font-medium text-slate-600">Endpoint</th>
-                      <th className="text-center px-4 py-2 font-medium text-slate-600">Status</th>
-                      <th className="text-right px-4 py-2 font-medium text-slate-600">Latency</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {tests.map((t) => (
-                      <tr key={t.name} className="hover:bg-slate-50">
-                        <td className="px-4 py-2.5 font-medium text-slate-800">{t.name}</td>
-                        <td className="px-4 py-2.5 text-slate-500 font-mono text-xs">{t.endpoint}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          {t.status === 'testing' && <RefreshCw className="h-4 w-4 animate-spin text-blue-500 mx-auto" />}
-                          {t.status === 'pass' && <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />}
-                          {t.status === 'fail' && <XCircle className="h-4 w-4 text-red-500 mx-auto" />}
-                          {t.status === 'idle' && <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="px-4 py-2.5 text-right text-slate-500">
-                          {t.latency !== undefined ? `${t.latency}ms` : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+function M2CTab() {
+  const [assets, setAssets] = useState<any[]>([]);
+  const [selected, setSelected] = useState<any>(null);
+  const [docId, setDocId] = useState("");
+  const [linkType, setLinkType] = useState("ATTACHMENT");
+  const [status, setStatus] = useState<string>("");
 
-            {tests.length > 0 && !running && (
-              <div className={cn(
-                'flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium',
-                tests.every(t => t.status === 'pass')
-                  ? 'bg-green-50 text-green-700'
-                  : 'bg-amber-50 text-amber-700',
-              )}>
-                {tests.every(t => t.status === 'pass') ? (
-                  <><CheckCircle2 className="h-4 w-4" /> All services reachable — SAP connector can communicate with Apex Nexus</>
-                ) : (
-                  <><AlertTriangle className="h-4 w-4" /> Some services unreachable — check network and configuration</>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+  const reload = () => sapApi.assets().then((r: any) => setAssets(r.data?.data || []));
+  useEffect(reload, []);
 
-      {/* ── Live Data Panel ── */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <button
-          onClick={() => toggle('data')}
-          className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-slate-50 transition"
-        >
-          <div className="flex items-center gap-3">
-            <Database className="h-5 w-5 text-violet-600" />
-            <h3 className="font-semibold text-slate-900">Live Data from Apex Nexus</h3>
-            <span className="text-xs text-slate-400">Real-time data visible to SAP connector</span>
-          </div>
-          {expandedPanels.data ? <ChevronDown className="h-5 w-5 text-slate-400" /> : <ChevronRight className="h-5 w-5 text-slate-400" />}
-        </button>
+  const open = async (eid: string) => {
+    const r: any = await sapApi.asset(eid);
+    setSelected(r.data?.data);
+  };
 
-        {expandedPanels.data && (
-          <div className="px-6 pb-6 space-y-5">
-            {/* Summary cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: 'Documents', value: docCount, icon: FileText, color: 'bg-blue-50 text-blue-600' },
-                { label: 'Pending Approvals', value: approvalCount, icon: GitBranch, color: 'bg-amber-50 text-amber-600' },
-                { label: 'Audit Entries', value: auditCount, icon: ClipboardList, color: 'bg-green-50 text-green-600' },
-                { label: 'Retention Policies', value: retentionPolicies, icon: Shield, color: 'bg-red-50 text-red-600' },
-              ].map((card) => (
-                <div key={card.label} className="border border-slate-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className={cn('p-1.5 rounded-md', card.color)}>
-                      <card.icon className="h-4 w-4" />
-                    </div>
-                    <span className="text-xs font-medium text-slate-500">{card.label}</span>
-                  </div>
-                  <div className="text-2xl font-bold text-slate-900">
-                    {dataLoading ? '…' : card.value.toLocaleString()}
-                  </div>
-                </div>
-              ))}
-            </div>
+  const link = async () => {
+    if (!selected || !docId) return;
+    setStatus("linking");
+    try {
+      await sapApi.linkAsset(selected.equipment_id, docId.trim(), linkType);
+      setStatus("linked");
+      open(selected.equipment_id);
+      setDocId("");
+    } catch (e: any) {
+      setStatus("error: " + (e.response?.data?.message || e.message));
+    }
+  };
 
-            {/* Recent documents table */}
-            {documents.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-slate-600 mb-2">Recent Documents (SAP-visible)</h4>
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="text-left px-4 py-2 font-medium text-slate-600">Title</th>
-                        <th className="text-left px-4 py-2 font-medium text-slate-600">Type</th>
-                        <th className="text-left px-4 py-2 font-medium text-slate-600">Status</th>
-                        <th className="text-right px-4 py-2 font-medium text-slate-600">Size</th>
-                        <th className="text-right px-4 py-2 font-medium text-slate-600">Created</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {documents.map((doc) => (
-                        <tr key={doc.id} className="hover:bg-slate-50">
-                          <td className="px-4 py-2.5 font-medium text-slate-800 truncate max-w-[200px]">{doc.title}</td>
-                          <td className="px-4 py-2.5 text-slate-500 text-xs font-mono">{doc.mimeType}</td>
-                          <td className="px-4 py-2.5">
-                            <span className={cn(
-                              'px-2 py-0.5 rounded text-xs font-medium',
-                              doc.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500',
-                            )}>
-                              {doc.status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 text-right text-slate-500 text-xs">
-                            {formatBytes(doc.fileSizeBytes || doc.fileSize || 0)}
-                          </td>
-                          <td className="px-4 py-2.5 text-right text-slate-500 text-xs">
-                            {formatDateTime(doc.createdAt)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Sync Simulation Panel ── */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <button
-          onClick={() => toggle('sync')}
-          className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-slate-50 transition"
-        >
-          <div className="flex items-center gap-3">
-            <Link2 className="h-5 w-5 text-green-600" />
-            <h3 className="font-semibold text-slate-900">Sync Simulation</h3>
-            <span className="text-xs text-slate-400">Run a bi-directional sync cycle to prove integration works</span>
-          </div>
-          {expandedPanels.sync ? <ChevronDown className="h-5 w-5 text-slate-400" /> : <ChevronRight className="h-5 w-5 text-slate-400" />}
-        </button>
-
-        {expandedPanels.sync && (
-          <div className="px-6 pb-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={simulateSync}
-                disabled={syncing}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition"
-              >
-                {syncing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                {syncing ? 'Syncing…' : 'Run Sync Cycle'}
-              </button>
-              <span className="text-xs text-slate-400">
-                Imports documents from Apex Nexus, exports SAP invoice, syncs workflow definitions
-              </span>
-            </div>
-
-            {/* Sync architecture diagram */}
-            <div className="flex items-center justify-center gap-4 py-6 bg-slate-50 rounded-lg border border-slate-200">
-              <div className="text-center">
-                <div className="bg-blue-100 rounded-xl p-4 mb-2 inline-block">
-                  <Server className="h-8 w-8 text-blue-600" />
-                </div>
-                <div className="text-sm font-semibold text-slate-700">SAP ERP</div>
-                <div className="text-xs text-slate-400">S/4HANA</div>
-              </div>
-
-              <div className="flex flex-col items-center gap-1">
-                <div className="flex items-center gap-1">
-                  <ArrowUpFromLine className="h-4 w-4 text-green-500" />
-                  <span className="text-[10px] text-slate-400 w-16 text-center">Invoices</span>
-                  <ArrowDownToLine className="h-4 w-4 text-green-500" />
-                </div>
-                <div className={cn(
-                  'px-3 py-1 rounded-full text-[10px] font-bold',
-                  isActive ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-500',
-                )}>
-                  {isActive ? 'CONNECTED' : 'DISCONNECTED'}
-                </div>
-                <div className="flex items-center gap-1">
-                  <ArrowDownToLine className="h-4 w-4 text-blue-500" />
-                  <span className="text-[10px] text-slate-400 w-16 text-center">Documents</span>
-                  <ArrowUpFromLine className="h-4 w-4 text-blue-500" />
-                </div>
-              </div>
-
-              <div className="text-center">
-                <div className="bg-violet-100 rounded-xl p-4 mb-2 inline-block">
-                  <Database className="h-8 w-8 text-violet-600" />
-                </div>
-                <div className="text-sm font-semibold text-slate-700">Apex Nexus</div>
-                <div className="text-xs text-slate-400">ECM Platform</div>
-              </div>
-            </div>
-
-            {/* Sync log */}
-            {syncLog.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-slate-600 mb-2">Sync Log</h4>
-                <div className="border border-slate-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 sticky top-0">
-                      <tr>
-                        <th className="text-left px-3 py-2 font-medium text-slate-600 w-10">#</th>
-                        <th className="text-left px-3 py-2 font-medium text-slate-600">Time</th>
-                        <th className="text-center px-3 py-2 font-medium text-slate-600">Dir</th>
-                        <th className="text-left px-3 py-2 font-medium text-slate-600">Object</th>
-                        <th className="text-center px-3 py-2 font-medium text-slate-600">Status</th>
-                        <th className="text-left px-3 py-2 font-medium text-slate-600">Detail</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {syncLog.map((ev) => (
-                        <tr key={ev.id} className="hover:bg-slate-50">
-                          <td className="px-3 py-2 text-slate-400 text-xs">{ev.id}</td>
-                          <td className="px-3 py-2 text-slate-500 text-xs whitespace-nowrap">
-                            {formatDateTime(ev.timestamp)}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            {ev.direction === 'IMPORT' ? (
-                              <Download className="h-3.5 w-3.5 text-blue-500 mx-auto" />
-                            ) : (
-                              <Upload className="h-3.5 w-3.5 text-green-500 mx-auto" />
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-slate-700 text-xs font-medium">{ev.objectType}</td>
-                          <td className="px-3 py-2 text-center">
-                            {ev.status === 'SUCCESS' ? (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-green-500 mx-auto" />
-                            ) : (
-                              <XCircle className="h-3.5 w-3.5 text-red-500 mx-auto" />
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-slate-500 text-xs">{ev.detail}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* ── Integration Architecture ── */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-        <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
-          <Server className="h-5 w-5 text-slate-600" />
-          Integration Architecture
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div>
+        <h3 className="text-sm font-semibold text-zinc-200 mb-2 flex items-center gap-2">
+          <Boxes className="w-4 h-4 text-purple-400" /> SAP Equipment Records
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          {[
-            {
-              title: 'Document Archival',
-              icon: FileText,
-              color: 'text-blue-600 bg-blue-50',
-              items: ['ERP generates invoices / POs', 'Uploads via Document API', 'Links document ID back to ERP record'],
-            },
-            {
-              title: 'Approval Sync',
-              icon: GitBranch,
-              color: 'text-amber-600 bg-amber-50',
-              items: ['Workflow approval events', 'Publish to ERP webhook', 'Update ERP approval status'],
-            },
-            {
-              title: 'Retention Compliance',
-              icon: Shield,
-              color: 'text-red-600 bg-red-50',
-              items: ['ERP defines retention rules', 'Retention API creates policies', 'Automated lifecycle management'],
-            },
-          ].map((block) => (
-            <div key={block.title} className="border border-slate-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <div className={cn('p-1.5 rounded-md', block.color)}>
-                  <block.icon className="h-4 w-4" />
-                </div>
-                <span className="font-medium text-slate-800">{block.title}</span>
+        <div className="space-y-2">
+          {assets.map((a) => (
+            <button
+              key={a.equipment_id}
+              onClick={() => open(a.equipment_id)}
+              className={`w-full text-left rounded-lg border p-3 transition ${
+                selected?.equipment_id === a.equipment_id
+                  ? "border-purple-500/60 bg-purple-500/10"
+                  : "border-zinc-800 bg-zinc-900/40 hover:border-zinc-700"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="font-mono text-sm text-zinc-100">{a.equipment_id}</div>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300">{a.asset_type}</span>
               </div>
-              <ol className="space-y-1.5 text-slate-500 text-xs">
-                {block.items.map((item, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className="bg-slate-200 text-slate-600 rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{i + 1}</span>
-                    {item}
-                  </li>
-                ))}
-              </ol>
-            </div>
+              <div className="text-xs text-zinc-300 mt-0.5">{a.name}</div>
+              <div className="text-[10px] text-zinc-500 mt-0.5 flex items-center gap-2">
+                <Building2 className="w-3 h-3" /> {a.site} · {a.functional_location}
+              </div>
+            </button>
           ))}
         </div>
       </div>
+
+      <div>
+        <h3 className="text-sm font-semibold text-zinc-200 mb-2 flex items-center gap-2">
+          <Link2 className="w-4 h-4 text-pink-400" /> Link Document to Equipment
+        </h3>
+        {!selected ? (
+          <div className="text-xs text-zinc-500 border border-dashed border-zinc-800 rounded-lg p-6 text-center">
+            Pick an equipment record on the left.
+          </div>
+        ) : (
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Tag className="w-4 h-4 text-purple-400" />
+              <div className="text-sm text-zinc-100 font-semibold">{selected.equipment_id}</div>
+              <div className="text-xs text-zinc-400">· {selected.name}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs mb-4">
+              <Field label="Functional Location">{selected.functional_location}</Field>
+              <Field label="Site">{selected.site}</Field>
+              <Field label="Asset Type">{selected.asset_type}</Field>
+              <Field label="Status">{selected.status}</Field>
+            </div>
+
+            <div className="space-y-2 mb-3">
+              <input
+                value={docId}
+                onChange={(e) => setDocId(e.target.value)}
+                placeholder="Document UUID to attach"
+                className="w-full rounded bg-zinc-950 border border-zinc-700 px-3 py-2 text-xs font-mono text-zinc-200"
+              />
+              <div className="flex items-center gap-2">
+                <select
+                  title="Link type"
+                  value={linkType}
+                  onChange={(e) => setLinkType(e.target.value)}
+                  className="rounded bg-zinc-950 border border-zinc-700 px-2 py-1.5 text-xs text-zinc-200"
+                >
+                  <option value="ATTACHMENT">ATTACHMENT</option>
+                  <option value="ORIGINAL">ORIGINAL</option>
+                  <option value="RENDITION">RENDITION</option>
+                </select>
+                <button
+                  onClick={link}
+                  disabled={!docId}
+                  className="px-3 py-1.5 rounded bg-gradient-to-r from-pink-500 to-purple-500 text-white text-xs font-medium disabled:opacity-50 flex items-center gap-2"
+                >
+                  <Link2 className="w-3.5 h-3.5" /> Link via ArchiveLink (EQUI)
+                </button>
+              </div>
+              {status && <div className="text-[11px] text-zinc-400">{status}</div>}
+            </div>
+
+            <div className="text-[11px] uppercase text-zinc-500 tracking-wide mb-1">
+              Linked Documents ({selected.attachments?.length || 0})
+            </div>
+            <div className="space-y-1">
+              {(selected.attachments || []).map((att: any) => (
+                <div key={att.id} className="rounded border border-zinc-800 bg-zinc-950 p-2 text-xs">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-3.5 h-3.5 text-zinc-500" />
+                    <span className="text-zinc-200">{att.title}</span>
+                    <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 rounded">{att.link_type}</span>
+                    <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 rounded">{att.document_class}</span>
+                  </div>
+                  <div className="text-[10px] text-zinc-500 mt-0.5 font-mono">{att.document_id}</div>
+                </div>
+              ))}
+              {(!selected.attachments || selected.attachments.length === 0) && (
+                <div className="text-xs text-zinc-500 italic">No documents linked yet.</div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ────────────── ARCHIVELINK ────────────── */
+
+function ArchiveLinkTab() {
+  const [arObject, setArObject] = useState("BUS2081");
+  const [objectKey, setObjectKey] = useState("");
+  const [docs, setDocs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const query = async () => {
+    if (!objectKey) return;
+    setLoading(true);
+    try {
+      const r: any = await sapApi.transactionDocuments(arObject, objectKey);
+      setDocs(r.data?.data || []);
+    } catch {
+      setDocs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 mb-4">
+        <div className="text-xs text-zinc-400 mb-3">
+          This is what SAP sees when a user opens the transaction. Documents linked via Apex appear in SAP's
+          attachment list natively — no custom UI inside SAP needed.
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <div>
+            <div className="text-[10px] uppercase text-zinc-500 tracking-wide mb-1">BOR Object</div>
+            <select
+              title="SAP BOR object"
+              value={arObject}
+              onChange={(e) => setArObject(e.target.value)}
+              className="rounded bg-zinc-950 border border-zinc-700 px-2 py-1.5 text-xs text-zinc-200"
+            >
+              <option value="BUS2081">BUS2081 (FI Invoice)</option>
+              <option value="EQUI">EQUI (Equipment)</option>
+              <option value="IFLOT">IFLOT (Functional Location)</option>
+              <option value="BKPF">BKPF (Accounting Doc)</option>
+            </select>
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <div className="text-[10px] uppercase text-zinc-500 tracking-wide mb-1">Object Key</div>
+            <input
+              value={objectKey}
+              onChange={(e) => setObjectKey(e.target.value)}
+              placeholder="e.g. 5105681502 or EQ-10000042"
+              className="w-full rounded bg-zinc-950 border border-zinc-700 px-3 py-1.5 text-xs font-mono text-zinc-200"
+            />
+          </div>
+          <button
+            onClick={query}
+            disabled={!objectKey || loading}
+            className="px-4 py-1.5 rounded bg-blue-500 text-white text-xs font-medium disabled:opacity-50 flex items-center gap-2"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+            Query SAP ArchiveLink
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-zinc-800 overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-zinc-900/60 text-zinc-400">
+            <tr>
+              <th className="text-left p-2">Link ID</th>
+              <th className="text-left p-2">Document</th>
+              <th className="text-left p-2">Link Type</th>
+              <th className="text-left p-2">Class</th>
+              <th className="text-left p-2">Linked At</th>
+            </tr>
+          </thead>
+          <tbody>
+            {docs.map((d) => (
+              <tr key={d.link_id} className="border-t border-zinc-800">
+                <td className="p-2 font-mono text-zinc-400">{String(d.link_id).slice(0, 8)}…</td>
+                <td className="p-2 text-zinc-200">{d.title}</td>
+                <td className="p-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-300">{d.link_type}</span>
+                </td>
+                <td className="p-2 text-zinc-300">{d.document_class}</td>
+                <td className="p-2 text-zinc-400">{new Date(d.linked_at).toLocaleString()}</td>
+              </tr>
+            ))}
+            {docs.length === 0 && (
+              <tr><td colSpan={5} className="p-4 text-center text-zinc-500">No documents linked.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Loader() {
+  return (
+    <div className="flex items-center gap-2 text-zinc-400 text-sm py-6">
+      <Loader2 className="w-4 h-4 animate-spin" /> Loading...
     </div>
   );
 }

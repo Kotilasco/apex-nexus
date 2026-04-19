@@ -15,7 +15,7 @@ const dispositionStatusColors: Record<string, string> = {
   PENDING: 'bg-amber-100 text-amber-700',
   APPROVED: 'bg-green-100 text-green-700',
   REJECTED: 'bg-red-100 text-red-700',
-  EXECUTED: 'bg-slate-200 text-slate-500',
+  DESTROYED: 'bg-slate-200 text-slate-500',
   ON_HOLD: 'bg-blue-100 text-blue-700',
 };
 
@@ -138,11 +138,10 @@ export default function RetentionPage() {
             <button
               key={t.key}
               onClick={() => { setTab(t.key); setPage(0); }}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-                tab === t.key
-                  ? 'border-primary-600 text-primary-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-700'
-              }`}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${tab === t.key
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
             >
               {t.label}
             </button>
@@ -158,13 +157,12 @@ export default function RetentionPage() {
         <div className="space-y-4">
           {/* Status filter */}
           <div className="flex gap-2">
-            {['PENDING', 'APPROVED', 'REJECTED', 'ON_HOLD', 'EXECUTED'].map((s) => (
+            {['PENDING', 'APPROVED', 'REJECTED', 'ON_HOLD', 'DESTROYED'].map((s) => (
               <button
                 key={s}
                 onClick={() => { setStatusFilter(s); setPage(0); }}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  statusFilter === s ? dispositionStatusColors[s] : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                }`}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${statusFilter === s ? dispositionStatusColors[s] : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  }`}
               >
                 {s.replace('_', ' ')}
               </button>

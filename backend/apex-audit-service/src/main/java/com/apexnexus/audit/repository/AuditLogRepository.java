@@ -35,7 +35,10 @@ public interface AuditLogRepository extends JpaRepository<AuditLogEntry, UUID> {
     @Query("SELECT a.action, COUNT(a) FROM AuditLogEntry a WHERE a.createdAt >= :since GROUP BY a.action ORDER BY COUNT(a) DESC")
     List<Object[]> getActionCounts(@Param("since") LocalDateTime since);
 
-    @Query("SELECT a.userId, COUNT(a) FROM AuditLogEntry a WHERE a.createdAt >= :since GROUP BY a.userId ORDER BY COUNT(a) DESC")
+    @Query("SELECT COALESCE(a.username, CAST(a.userId AS string), 'SYSTEM'), COUNT(a) " +
+           "FROM AuditLogEntry a WHERE a.createdAt >= :since " +
+           "GROUP BY COALESCE(a.username, CAST(a.userId AS string), 'SYSTEM') " +
+           "ORDER BY COUNT(a) DESC")
     List<Object[]> getMostActiveUsers(@Param("since") LocalDateTime since);
 
     Page<AuditLogEntry> findByActorType(String actorType, Pageable pageable);
@@ -53,4 +56,7 @@ public interface AuditLogRepository extends JpaRepository<AuditLogEntry, UUID> {
 
     @Query("SELECT a FROM AuditLogEntry a WHERE a.sequenceNumber IS NOT NULL ORDER BY a.sequenceNumber ASC")
     List<AuditLogEntry> findAllChainedEntries();
+
+    @Query("SELECT a FROM AuditLogEntry a WHERE a.sequenceNumber IS NOT NULL AND a.sequenceNumber >= :from ORDER BY a.sequenceNumber ASC")
+    List<AuditLogEntry> findChainedEntriesFrom(@Param("from") Long from);
 }

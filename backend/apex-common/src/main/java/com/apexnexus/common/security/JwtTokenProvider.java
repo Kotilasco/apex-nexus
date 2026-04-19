@@ -84,6 +84,35 @@ public class JwtTokenProvider {
         return claims.get("roles", List.class);
     }
 
+    /**
+     * Extract the project permissions map from the token.
+     * Returns a map of projectId -> list of permission names (e.g. "READ", "WRITE", "ADMIN").
+     * Returns an empty map if the token has no projectPerms claim.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<UUID, List<String>> getProjectPermsFromToken(String token) {
+        Claims claims = parseToken(token);
+        Object raw = claims.get("projectPerms");
+        if (!(raw instanceof Map<?, ?> rawMap)) {
+            return Map.of();
+        }
+        Map<UUID, List<String>> result = new java.util.HashMap<>();
+        for (Map.Entry<?, ?> e : rawMap.entrySet()) {
+            try {
+                UUID projectId = UUID.fromString(String.valueOf(e.getKey()));
+                Object v = e.getValue();
+                if (v instanceof List<?> list) {
+                    List<String> perms = new java.util.ArrayList<>();
+                    for (Object o : list) perms.add(String.valueOf(o));
+                    result.put(projectId, perms);
+                }
+            } catch (IllegalArgumentException ignored) {
+                // skip malformed project id
+            }
+        }
+        return result;
+    }
+
     public boolean validateToken(String token) {
         try {
             parseToken(token);

@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
 import Sidebar from '@/components/Sidebar';
 import Navbar from '@/components/Navbar';
+import CommandBar from '@/components/CommandBar';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -40,6 +41,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <Navbar onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
         <main className="flex-1 overflow-auto p-6">{children}</main>
       </div>
+      <CommandBar />
     </div>
   );
 }

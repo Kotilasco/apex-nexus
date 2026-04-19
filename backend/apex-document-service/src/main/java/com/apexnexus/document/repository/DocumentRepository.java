@@ -34,5 +34,14 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
 
     Page<Document> findByProjectId(UUID projectId, Pageable pageable);
 
+    Page<Document> findByProjectIdAndStatusNotIn(UUID projectId, List<String> statuses, Pageable pageable);
+
     Page<Document> findByProjectIdAndFolderId(UUID projectId, UUID folderId, Pageable pageable);
+
+    Page<Document> findByProjectIdAndFolderIdAndStatusNotIn(UUID projectId, UUID folderId, List<String> statuses,
+            Pageable pageable);
+
+    List<Document> findByParentDocumentId(UUID parentDocumentId);
+
+    Optional<Document> findByEmailMessageId(String emailMessageId);
 }

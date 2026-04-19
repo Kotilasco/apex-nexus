@@ -17,7 +17,7 @@ export default function PresenceIndicator({ documentId }: { documentId: string }
 
     const fetchViewers = async () => {
       try {
-        const res = await presenceApi.getViewers(documentId);
+        const res = await presenceApi.get(documentId);
         setViewers(res.data.data?.viewers || []);
       } catch {
         // Silently fail — presence is non-critical

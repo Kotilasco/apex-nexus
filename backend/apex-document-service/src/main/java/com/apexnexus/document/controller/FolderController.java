@@ -3,6 +3,7 @@ package com.apexnexus.document.controller;
 import com.apexnexus.common.dto.ApiResponse;
 import com.apexnexus.common.exception.BusinessException;
 import com.apexnexus.common.exception.ResourceNotFoundException;
+import com.apexnexus.common.security.SecurityContextUtil;
 import com.apexnexus.document.dto.FolderDto;
 import com.apexnexus.document.model.Folder;
 import com.apexnexus.document.repository.FolderRepository;
@@ -30,6 +31,11 @@ public class FolderController {
             Authentication auth) {
         UUID userId = (UUID) auth.getPrincipal();
 
+        // Zero-trust: creator must be a member of the target project (or a system admin).
+        if (request.getProjectId() != null) {
+            SecurityContextUtil.requireProjectAccess(request.getProjectId());
+        }
+
         if (request.getParentId() != null &&
             folderRepository.existsByParentIdAndName(request.getParentId(), request.getName())) {
             throw new BusinessException("Folder with this name already exists in the parent");
@@ -40,6 +46,8 @@ public class FolderController {
         if (request.getParentId() != null) {
             Folder parent = folderRepository.findById(request.getParentId())
                     .orElseThrow(() -> new ResourceNotFoundException("Folder", "id", request.getParentId()));
+            // Must also have access to the parent folder.
+            SecurityContextUtil.requireResourceAccess(parent.getProjectId(), parent.getOwnerId());
             parentPath = parent.getPath();
             depth = parent.getDepth() + 1;
         }
@@ -63,11 +71,15 @@ public class FolderController {
     public ResponseEntity<ApiResponse<FolderDto>> getFolder(@PathVariable UUID id) {
         Folder folder = folderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Folder", "id", id));
+        SecurityContextUtil.requireResourceAccess(folder.getProjectId(), folder.getOwnerId());
         return ResponseEntity.ok(ApiResponse.ok(mapToDto(folder)));
     }
 
     @GetMapping("/{id}/children")
     public ResponseEntity<ApiResponse<List<FolderDto>>> getChildren(@PathVariable UUID id) {
+        Folder parent = folderRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Folder", "id", id));
+        SecurityContextUtil.requireResourceAccess(parent.getProjectId(), parent.getOwnerId());
         List<FolderDto> children = folderRepository.findByParentIdOrderByNameAsc(id)
                 .stream().map(this::mapToDto).toList();
         return ResponseEntity.ok(ApiResponse.ok(children));
@@ -75,8 +87,16 @@ public class FolderController {
 
     @GetMapping("/root")
     public ResponseEntity<ApiResponse<List<FolderDto>>> getRootFolders() {
-        List<FolderDto> roots = folderRepository.findByParentIdIsNullOrderByNameAsc()
-                .stream().map(this::mapToDto).toList();
+        // Root folders are global. Non-admins only see roots for projects they belong to,
+        // plus any personal root folders they own.
+        UUID me = SecurityContextUtil.currentUserId();
+        boolean admin = SecurityContextUtil.isSystemAdmin();
+        java.util.Set<UUID> myProjects = SecurityContextUtil.accessibleProjectIds();
+        List<FolderDto> roots = folderRepository.findByParentIdIsNullOrderByNameAsc().stream()
+                .filter(f -> admin
+                        || (f.getProjectId() != null && myProjects.contains(f.getProjectId()))
+                        || (f.getProjectId() == null && me != null && me.equals(f.getOwnerId())))
+                .map(this::mapToDto).toList();
         return ResponseEntity.ok(ApiResponse.ok(roots));
     }
 
@@ -84,6 +104,7 @@ public class FolderController {
     public ResponseEntity<ApiResponse<List<FolderDto>>> getProjectFolders(
             @PathVariable UUID projectId,
             @RequestParam(required = false) UUID parentId) {
+        SecurityContextUtil.requireProjectAccess(projectId);
         List<FolderDto> folders;
         if (parentId != null) {
             folders = folderRepository.findByProjectIdAndParentIdOrderByNameAsc(projectId, parentId)
@@ -99,6 +120,7 @@ public class FolderController {
     public ResponseEntity<ApiResponse<Void>> deleteFolder(@PathVariable UUID id) {
         Folder folder = folderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Folder", "id", id));
+        SecurityContextUtil.requireResourceAccess(folder.getProjectId(), folder.getOwnerId());
         if (Boolean.TRUE.equals(folder.getIsSystem())) {
             throw new BusinessException("System folders cannot be deleted");
         }

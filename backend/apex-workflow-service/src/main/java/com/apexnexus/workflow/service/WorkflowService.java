@@ -31,6 +31,7 @@ public class WorkflowService {
     private final WorkflowApprovalRepository approvalRepository;
     private final ApprovalGroupRepository approvalGroupRepository;
     private final AuditPublisher auditPublisher;
+    private final com.apexnexus.common.notification.NotificationPublisher notificationPublisher;
 
     // === Allowed transitions (state machine) ===
     private static final Map<WorkflowStatus, Map<String, WorkflowStatus>> STATE_MACHINE = Map.of(
@@ -265,6 +266,18 @@ public class WorkflowService {
                         .groupId(config.getGroupId())
                         .build();
                 approvalRepository.save(approval);
+
+                // Notify the assigned approver
+                notificationPublisher.publish(com.apexnexus.common.notification.NotificationEvent.builder()
+                        .userId(config.getApproverId())
+                        .type("WORKFLOW_TASK_ASSIGNED")
+                        .title("Approval assigned: " + definition.getName())
+                        .message("You have been assigned as an approver on workflow '" + definition.getName()
+                                + "' for document " + request.getDocumentId() + ".")
+                        .resourceType("WORKFLOW")
+                        .resourceId(instance.getId())
+                        .sendEmail(false)
+                        .build());
             }
         }
 

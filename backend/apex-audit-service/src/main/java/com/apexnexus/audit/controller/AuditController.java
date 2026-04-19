@@ -159,15 +159,21 @@ public class AuditController {
     // ============ CHAIN INTEGRITY VERIFICATION ============
 
     @GetMapping("/chain/verify")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> verifyChain() {
-        List<AuditLogEntry> entries = auditLogRepository.findAllChainedEntries();
+    public ResponseEntity<ApiResponse<Map<String, Object>>> verifyChain(
+            @RequestParam(required = false) Long fromSequence) {
+        List<AuditLogEntry> entries = (fromSequence != null)
+                ? auditLogRepository.findChainedEntriesFrom(fromSequence)
+                : auditLogRepository.findAllChainedEntries();
 
         if (entries.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.success(Map.of(
                     "valid", true, "entriesChecked", 0, "message", "No chained entries found")));
         }
 
-        String previousHash = "GENESIS";
+        // When verifying from a mid-point, seed previousHash from the actual chain
+        String previousHash = (fromSequence != null && !entries.isEmpty())
+                ? (entries.get(0).getPreviousHash() != null ? entries.get(0).getPreviousHash() : "GENESIS")
+                : "GENESIS";
         int checked = 0;
         Long brokenAt = null;
 
